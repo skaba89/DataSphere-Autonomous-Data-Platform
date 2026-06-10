@@ -156,7 +156,9 @@ def status(stack_file: str):
 
 
 from datasphere.cli.run_agents import run_agents
+from datasphere.cli.upgrade import upgrade
 main.add_command(run_agents, name="run")
+main.add_command(upgrade, name="upgrade")
 
 
 @main.command()

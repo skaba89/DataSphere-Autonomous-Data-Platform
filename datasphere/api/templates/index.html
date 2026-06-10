@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataSphere — Autonomous Data Platform</title>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #6366f1;
+      --accent2:  #22d3ee;
+      --success:  #22c55e;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --radius:   10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ---- Nav ---- */
+    nav {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 1.3rem; font-weight: 700; color: var(--accent2); letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .nav-badge {
+      font-size: 0.65rem; background: var(--accent); color: #fff;
+      padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    }
+    .nav-links { margin-left: auto; display: flex; gap: 20px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.9rem; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ---- Layout ---- */
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ---- Hero ---- */
+    .hero { text-align: center; padding: 48px 0 32px; }
+    .hero h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.1; margin-bottom: 14px; }
+    .hero h1 em { font-style: normal; color: var(--accent2); }
+    .hero p { color: var(--muted); font-size: 1.1rem; max-width: 560px; margin: 0 auto 28px; }
+    .hero-badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .badge {
+      font-size: 0.75rem; padding: 4px 12px;
+      border: 1px solid var(--border); border-radius: 20px; color: var(--muted);
+    }
+
+    /* ---- Tabs ---- */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+    .tab {
+      padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+      color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .tab.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .tab:hover:not(.active) { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 18px; color: var(--text); }
+
+    /* ---- Grid ---- */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 768px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    /* ---- Forms ---- */
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 9px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 0.9rem; transition: border .2s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 80px; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      padding: 10px 22px; border: none; border-radius: 7px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all .2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #3a3d50; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+    .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ---- Mode toggle ---- */
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 24px; }
+    .mode-btn {
+      flex: 1; padding: 14px; border: 2px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); color: var(--muted); cursor: pointer; text-align: center;
+      transition: all .2s; font-size: 0.9rem;
+    }
+    .mode-btn.active { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.1); }
+    .mode-btn h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+    .mode-btn p { font-size: 0.78rem; }
+
+    /* ---- Result area ---- */
+    .result-box {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; margin-top: 20px; display: none;
+    }
+    .result-box.visible { display: block; }
+    .result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+    .status-dot.pending { background: var(--warning); animation: pulse 1s infinite; }
+    .status-dot.error { background: var(--danger); }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* ---- Stack grid ---- */
+    .stack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .stack-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px; transition: border-color .2s;
+    }
+    .stack-card:hover { border-color: var(--accent); }
+    .stack-card .layer { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .stack-card .tool { font-size: 0.95rem; font-weight: 600; margin-top: 4px; color: var(--accent2); }
+
+    /* ---- Proposal cards ---- */
+    .proposal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .proposal-card {
+      background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius);
+      padding: 20px; cursor: pointer; transition: all .2s;
+    }
+    .proposal-card:hover, .proposal-card.selected { border-color: var(--accent); }
+    .proposal-card.selected { background: rgba(99,102,241,.08); }
+    .proposal-name { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+    .proposal-tagline { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+    .proposal-cost { font-size: 1.2rem; font-weight: 700; color: var(--accent2); }
+    .proposal-meta { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .tag {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+      background: rgba(255,255,255,.07); color: var(--muted);
+    }
+    .tag.complexity-low { color: var(--success); }
+    .tag.complexity-medium { color: var(--warning); }
+    .tag.complexity-high { color: var(--danger); }
+
+    /* ---- Artifacts ---- */
+    .artifact-list { list-style: none; }
+    .artifact-list li {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+    }
+    .artifact-list li:last-child { border-bottom: none; }
+    .artifact-icon { font-size: 1rem; }
+
+    /* ---- Agent results ---- */
+    .agent-result { margin-bottom: 16px; }
+    .agent-title { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .agent-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .cost-big { font-size: 2rem; font-weight: 800; color: var(--accent2); }
+    .warning-list { list-style: none; }
+    .warning-list li { padding: 5px 0; font-size: 0.83rem; color: var(--warning); }
+    .warning-list li::before { content: "⚠ "; }
+
+    /* ---- Loader ---- */
+    .loader { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Toast ---- */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.88rem; display: none; z-index: 9999; max-width: 360px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    }
+    #toast.success { border-color: var(--success); }
+    #toast.error   { border-color: var(--danger); }
+
+    /* ---- Misc ---- */
+    .section-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 20px; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+    .text-muted { color: var(--muted); font-size: 0.85rem; }
+    .text-success { color: var(--success); }
+    .text-danger  { color: var(--danger); }
+    pre { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; overflow-x: auto; }
+    code { background: rgba(255,255,255,.05); padding: 2px 6px; border-radius: 4px; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="logo">Data<span>Sphere</span></div>
+  <span class="nav-badge">v1.0</span>
+  <div class="nav-links">
+    <a href="/docs" target="_blank">API Docs</a>
+    <a href="https://github.com/skaba89/datasphere-autonomous-data-platform" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Génère ton architecture data<br><em>en quelques secondes</em></h1>
+    <p>Décris ton besoin, choisis tes outils ou laisse les agents recommander.<br>DataSphere génère tout : infra, dbt, DAGs, CI/CD, sécurité.</p>
+    <div class="hero-badges">
+      <span class="badge">☁ AWS / GCP / Azure</span>
+      <span class="badge">🐳 Local Docker</span>
+      <span class="badge">⎈ Kubernetes</span>
+      <span class="badge">72 adaptateurs</span>
+      <span class="badge">Stack-agnostic</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('generate')">🚀 Générer</button>
+    <button class="tab" onclick="switchTab('proposals')">💡 Propositions</button>
+    <button class="tab" onclick="switchTab('generators')">🔧 dbt / DAGs</button>
+    <button class="tab" onclick="switchTab('catalog')">📦 Catalogue</button>
+    <button class="tab" onclick="switchTab('jobs')">📋 Historique</button>
+  </div>
+
+  <!-- ================================================================
+       TAB: GENERATE
+  ================================================================ -->
+  <div id="tab-generate" class="tab-panel active">
+
+    <!-- Mode selector -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode-explicit-btn" onclick="selectMode('explicit')">
+        <h4>Mode 1 — Explicit</h4>
+        <p>Vous choisissez chaque outil</p>
+      </button>
+      <button class="mode-btn" id="mode-recommended-btn" onclick="selectMode('recommended')">
+        <h4>Mode 2 — Recommandé</h4>
+        <p>Les agents recommandent selon votre contexte</p>
+      </button>
+    </div>
+
+    <div class="grid-2" style="gap:24px; align-items: start;">
+
+      <!-- Form -->
+      <div class="card">
+        <div class="field">
+          <label>Besoin métier *</label>
+          <textarea id="business_request" placeholder="Ex: Analyse des ventes par agence et région, tableau de bord temps réel…" rows="3"></textarea>
+        </div>
+
+        <!-- MODE 1 FIELDS -->
+        <div id="mode1-fields">
+          <div class="grid-2">
+            <div class="field">
+              <label>Cloud Provider</label>
+              <select id="cloud_provider">
+                <option value="aws">AWS</option>
+                <option value="gcp">GCP</option>
+                <option value="azure">Azure</option>
+                <option value="local-docker">Local Docker</option>
+                <option value="kubernetes">Kubernetes</option>
+                <option value="on-premise">On-Premise</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Budget</label>
+              <select id="budget">
+                <option value="low">Low (< 500$/mois)</option>
+                <option value="medium" selected>Medium (500–5k$/mois)</option>
+                <option value="enterprise">Enterprise (5k+$/mois)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Data Warehouse</label>
+              <select id="data_warehouse">
+                <option value="snowflake">Snowflake</option>
+                <option value="bigquery">BigQuery</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="redshift">Redshift</option>
+                <option value="databricks">Databricks</option>
+                <option value="clickhouse">ClickHouse</option>
+                <option value="duckdb">DuckDB</option>
+                <option value="azure-synapse">Azure Synapse</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Orchestrateur</label>
+              <select id="orchestrator">
+                <option value="airflow">Airflow</option>
+                <option value="dagster">Dagster</option>
+                <option value="prefect">Prefect</option>
+                <option value="argo">Argo Workflows</option>
+                <option value="kestra">Kestra</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="fivetran">Fivetran</option>
+                <option value="kafka-connect">Kafka Connect</option>
+                <option value="debezium">Debezium</option>
+                <option value="nifi">NiFi</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Transformation</label>
+              <select id="transformation">
+                <option value="dbt">dbt Core</option>
+                <option value="spark">Apache Spark</option>
+                <option value="sqlmesh">SQLMesh</option>
+                <option value="flink">Apache Flink</option>
+                <option value="polars">Polars</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>BI Tool</label>
+              <select id="bi_tool">
+                <option value="superset">Apache Superset</option>
+                <option value="metabase">Metabase</option>
+                <option value="redash">Redash</option>
+                <option value="evidence">Evidence</option>
+                <option value="tableau">Tableau</option>
+                <option value="powerbi">Power BI</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Déploiement</label>
+              <select id="deployment">
+                <option value="kubernetes">Kubernetes / Helm</option>
+                <option value="docker-compose">Docker Compose</option>
+                <option value="terraform">Terraform</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODE 2 FIELDS -->
+        <div id="mode2-fields" style="display:none;">
+          <div class="grid-2">
+            <div class="field">
+              <label>Taille d'équipe</label>
+              <select id="team_size">
+                <option value="solo">Solo (1 pers.)</option>
+                <option value="small" selected>Petite (2–5)</option>
+                <option value="medium">Moyenne (5–20)</option>
+                <option value="large">Grande (20+)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Volume de données</label>
+              <select id="data_volume">
+                <option value="small">Small (< 10 GB/j)</option>
+                <option value="medium" selected>Medium (10–500 GB/j)</option>
+                <option value="large">Large (500 GB–5 TB/j)</option>
+                <option value="xlarge">XLarge (5+ TB/j)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Budget</label>
+              <select id="budget2">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Préférence cloud</label>
+              <select id="cloud_preference">
+                <option value="none">Aucune préférence</option>
+                <option value="aws">AWS</option>
+                <option value="gcp">GCP</option>
+                <option value="azure">Azure</option>
+                <option value="local-docker">Local / Open source</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mode de traitement</label>
+              <select id="processing_mode2">
+                <option value="batch" selected>Batch (quotidien)</option>
+                <option value="realtime">Temps réel (streaming)</option>
+                <option value="micro-batch">Micro-batch</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Niveau de sécurité</label>
+              <select id="security_level">
+                <option value="rbac" selected>RBAC standard</option>
+                <option value="rls">RBAC + RLS</option>
+                <option value="enterprise">Enterprise (Vault, chiffrement)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Open source uniquement ?</label>
+            <select id="must_be_open_source">
+              <option value="false" selected>Non</option>
+              <option value="true">Oui — pas de SaaS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Exigences de conformité (séparées par virgule)</label>
+            <input id="compliance_requirements" type="text" placeholder="HDS, RGPD, HIPAA, SOX, PCI-DSS…" />
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:8px;">
+          <button class="btn btn-primary" id="generate-btn" onclick="runGenerate()">⚡ Générer</button>
+          <button class="btn btn-secondary" onclick="resetForm()">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Result panel -->
+      <div>
+        <div id="generate-result" class="result-box">
+          <div class="result-header">
+            <div id="result-dot" class="status-dot pending"></div>
+            <strong id="result-title">En cours de génération…</strong>
+          </div>
+          <div id="result-content">
+            <div class="loader">
+              <div class="spinner"></div>
+              <span class="text-muted">Les agents travaillent…</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3>Comment ça marche</h3>
+          <ol style="padding-left:18px; line-height:2; font-size:0.88rem; color:var(--muted);">
+            <li>Décrivez votre besoin métier</li>
+            <li>Choisissez votre stack (Mode 1) ou laissez les agents recommander (Mode 2)</li>
+            <li>6 agents analysent et génèrent en parallèle</li>
+            <li>Récupérez : infra, dbt, DAGs, CI/CD, sécurité</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: PROPOSALS
+  ================================================================ -->
+  <div id="tab-proposals" class="tab-panel">
+    <div class="section-title">Obtenir des propositions d'architecture</div>
+
+    <div class="grid-2" style="gap:24px; align-items:start;">
+      <div class="card">
+        <div class="grid-2">
+          <div class="field">
+            <label>Cloud</label>
+            <select id="p-cloud">
+              <option value="aws">AWS</option>
+              <option value="gcp">GCP</option>
+              <option value="azure">Azure</option>
+              <option value="local-docker">Local Docker</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Budget</label>
+            <select id="p-budget">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Volume</label>
+            <select id="p-volume">
+              <option value="small">Small</option>
+              <option value="medium" selected>Medium</option>
+              <option value="large">Large</option>
+              <option value="xlarge">XLarge</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Mode</label>
+            <select id="p-mode">
+              <option value="batch" selected>Batch</option>
+              <option value="realtime">Realtime</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="fetchProposals()">💡 Obtenir les propositions</button>
+      </div>
+
+      <div id="proposals-result" style="display:none;">
+        <div id="proposals-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: GENERATORS
+  ================================================================ -->
+  <div id="tab-generators" class="tab-panel">
+    <div class="section-title">Générateurs de fichiers</div>
+
+    <div class="tabs" style="margin-bottom:20px;">
+      <button class="tab active" onclick="switchSubTab('dbt')">dbt Project</button>
+      <button class="tab" onclick="switchSubTab('airflow')">Airflow DAGs</button>
+      <button class="tab" onclick="switchSubTab('dagster')">Dagster</button>
+      <button class="tab" onclick="switchSubTab('prefect')">Prefect</button>
+    </div>
+
+    <!-- dbt -->
+    <div id="subtab-dbt" class="tab-panel active">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <div class="field">
+            <label>Besoin métier</label>
+            <input id="dbt-request" type="text" placeholder="Analyse des ventes par agence" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Data Warehouse</label>
+              <select id="dbt-warehouse">
+                <option value="snowflake">Snowflake</option>
+                <option value="bigquery">BigQuery</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="redshift">Redshift</option>
+                <option value="databricks">Databricks</option>
+                <option value="clickhouse">ClickHouse</option>
+                <option value="duckdb">DuckDB</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="dbt-ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="fivetran">Fivetran</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateDbt()">⚡ Générer le projet dbt</button>
+        </div>
+        <div id="dbt-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Airflow -->
+    <div id="subtab-airflow" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <div class="field">
+            <label>Besoin métier</label>
+            <input id="dag-request" type="text" placeholder="Pipeline ventes quotidien" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="dag-ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="kafka-connect">Kafka Connect</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Transformation</label>
+              <select id="dag-transform">
+                <option value="dbt">dbt</option>
+                <option value="spark">Spark</option>
+                <option value="sqlmesh">SQLMesh</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Qualité</label>
+              <select id="dag-quality">
+                <option value="great-expectations">Great Expectations</option>
+                <option value="soda-core">Soda Core</option>
+                <option value="dbt-tests">dbt tests</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mode</label>
+              <select id="dag-mode">
+                <option value="batch" selected>Batch</option>
+                <option value="realtime">Realtime</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateDags()">⚡ Générer les DAGs</button>
+        </div>
+        <div id="dag-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Dagster -->
+    <div id="subtab-dagster" class="tab-panel">
+      <div class="card" style="max-width:500px;">
+        <div class="field">
+          <label>Besoin métier</label>
+          <input id="dagster-request" type="text" placeholder="Pipeline analytics" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="dagster-warehouse">
+              <option value="snowflake">Snowflake</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="bigquery">BigQuery</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="dagster-ingestion">
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="generateDagster()">⚡ Générer le projet Dagster</button>
+      </div>
+      <div id="dagster-result" style="margin-top:20px; display:none;"></div>
+    </div>
+
+    <!-- Prefect -->
+    <div id="subtab-prefect" class="tab-panel">
+      <div class="card" style="max-width:500px;">
+        <div class="field">
+          <label>Besoin métier</label>
+          <input id="prefect-request" type="text" placeholder="Pipeline analytics" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="prefect-warehouse">
+              <option value="snowflake">Snowflake</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="bigquery">BigQuery</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="prefect-ingestion">
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="generatePrefect()">⚡ Générer les Flows Prefect</button>
+      </div>
+      <div id="prefect-result" style="margin-top:20px; display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: CATALOG
+  ================================================================ -->
+  <div id="tab-catalog" class="tab-panel">
+    <div class="section-title">Outils supportés</div>
+    <div id="catalog-content">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: JOBS
+  ================================================================ -->
+  <div id="tab-jobs" class="tab-panel">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+      <div class="section-title" style="margin:0;">Historique des jobs</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadJobs()">↺ Rafraîchir</button>
+    </div>
+    <div id="jobs-content">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// Globals
+// ============================================================
+let currentMode = 'explicit';
+let pollTimer = null;
+let currentSubTab = 'dbt';
+
+// ============================================================
+// Tab switching
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tabs > .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'catalog') loadCatalog();
+  if (name === 'jobs') loadJobs();
+}
+
+function switchSubTab(name) {
+  currentSubTab = name;
+  document.querySelectorAll('#tab-generators .tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#tab-generators .tabs .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('subtab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ============================================================
+// Mode toggle
+// ============================================================
+function selectMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-explicit-btn').classList.toggle('active', mode === 'explicit');
+  document.getElementById('mode-recommended-btn').classList.toggle('active', mode === 'recommended');
+  document.getElementById('mode1-fields').style.display = mode === 'explicit' ? 'block' : 'none';
+  document.getElementById('mode2-fields').style.display = mode === 'recommended' ? 'block' : 'none';
+}
+
+// ============================================================
+// Generate
+// ============================================================
+async function runGenerate() {
+  const btn = document.getElementById('generate-btn');
+  const request = document.getElementById('business_request').value.trim();
+  if (!request) { toast('Décrivez votre besoin métier', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ En cours…';
+
+  const resultBox = document.getElementById('generate-result');
+  resultBox.classList.add('visible');
+  document.getElementById('result-dot').className = 'status-dot pending';
+  document.getElementById('result-title').textContent = 'Génération en cours…';
+  document.getElementById('result-content').innerHTML = `
+    <div class="loader">
+      <div class="spinner"></div>
+      <span class="text-muted">6 agents analysent votre demande…</span>
+    </div>`;
+
+  const payload = buildPayload(request);
+
+  try {
+    const res = await fetch('/generate/sync', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erreur serveur');
+    }
+
+    const data = await res.json();
+    renderResult(data);
+    toast('Architecture générée avec succès !', 'success');
+  } catch (e) {
+    document.getElementById('result-dot').className = 'status-dot error';
+    document.getElementById('result-title').textContent = 'Erreur de génération';
+    document.getElementById('result-content').innerHTML =
+      `<p class="text-danger" style="padding:12px;">${e.message}</p>`;
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Générer';
+  }
+}
+
+function buildPayload(request) {
+  if (currentMode === 'explicit') {
+    return {
+      mode: 'explicit',
+      business_request: request,
+      cloud_provider:   document.getElementById('cloud_provider').value,
+      data_warehouse:   document.getElementById('data_warehouse').value,
+      orchestrator:     document.getElementById('orchestrator').value,
+      ingestion:        document.getElementById('ingestion').value,
+      transformation:   document.getElementById('transformation').value,
+      bi_tool:          document.getElementById('bi_tool').value,
+      deployment:       document.getElementById('deployment').value,
+      budget:           document.getElementById('budget').value,
+      security:         ['RBAC'],
+    };
+  } else {
+    const compliance = document.getElementById('compliance_requirements').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+    return {
+      mode: 'recommended',
+      business_request: request,
+      budget:           document.getElementById('budget2').value,
+      data_volume:      document.getElementById('data_volume').value,
+      team_size:        document.getElementById('team_size').value,
+      security_level:   document.getElementById('security_level').value,
+      cloud_preference: document.getElementById('cloud_preference').value,
+      processing_mode:  document.getElementById('processing_mode2').value,
+      must_be_open_source: document.getElementById('must_be_open_source').value === 'true',
+      compliance_requirements: compliance,
+    };
+  }
+}
+
+function renderResult(data) {
+  document.getElementById('result-dot').className = 'status-dot';
+  document.getElementById('result-title').textContent = data.success ? '✅ Génération réussie' : '⚠ Terminé avec avertissements';
+
+  const sa = data.stack_advisor || {};
+  const co = data.cost_optimization || {};
+  const sec = data.security_compliance || {};
+  const dep = data.deployment || {};
+  const infra = data.infrastructure || {};
+
+  const stack = sa.validated_stack || {};
+  const stackCards = Object.entries(stack)
+    .map(([k,v]) => `<div class="stack-card"><div class="layer">${k}</div><div class="tool">${v}</div></div>`)
+    .join('');
+
+  const warnings = (sa.warnings || [])
+    .map(w => `<li>${w}</li>`).join('') || '<li style="color:var(--success)">Aucun avertissement</li>';
+
+  const artifacts = (infra.artifact_keys || [])
+    .map(k => `<li><span class="artifact-icon">${k.endsWith('.yml') ? '📄' : k.endsWith('.tf') ? '🏗' : '📁'}</span>${k}</li>`)
+    .join('');
+
+  const stages = (dep.pipeline_stages || [])
+    .map(s => `<li style="padding:3px 0; font-size:0.82rem;">${s}</li>`).join('');
+
+  document.getElementById('result-content').innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:20px;">
+
+      <div>
+        <div class="agent-title"><div class="dot"></div>Stack validée</div>
+        <div class="stack-grid">${stackCards}</div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="agent-title"><div class="dot"></div>Coûts estimés</div>
+          <div class="cost-big">$${(co.total_monthly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}<span style="font-size:1rem;color:var(--muted)">/mois</span></div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;">$${(co.total_yearly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}/an</div>
+        </div>
+        <div>
+          <div class="agent-title"><div class="dot"></div>Sécurité & Compliance</div>
+          <div style="font-size:0.82rem;color:var(--muted);">
+            ${(sec.compliance_notes||[]).slice(0,3).map(n=>`• ${n}`).join('<br>') || '• Configuration standard RBAC'}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="agent-title"><div class="dot"></div>Avertissements</div>
+        <ul class="warning-list">${warnings}</ul>
+      </div>
+
+      ${artifacts ? `<div>
+        <div class="agent-title"><div class="dot"></div>Fichiers générés (infra)</div>
+        <ul class="artifact-list">${artifacts}</ul>
+      </div>` : ''}
+
+      ${stages ? `<div>
+        <div class="agent-title"><div class="dot"></div>Pipeline CI/CD</div>
+        <ul style="padding-left:0;list-style:none;">${stages}</ul>
+      </div>` : ''}
+    </div>`;
+}
+
+function resetForm() {
+  document.getElementById('business_request').value = '';
+  document.getElementById('generate-result').classList.remove('visible');
+}
+
+// ============================================================
+// Proposals
+// ============================================================
+async function fetchProposals() {
+  const div = document.getElementById('proposals-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/proposals', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        cloud_provider:  document.getElementById('p-cloud').value,
+        budget:          document.getElementById('p-budget').value,
+        data_volume:     document.getElementById('p-volume').value,
+        processing_mode: document.getElementById('p-mode').value,
+        deployment:      'kubernetes',
+        security:        ['RBAC'],
+      }),
+    });
+    const data = await res.json();
+    renderProposals(data.proposals || []);
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+function renderProposals(proposals) {
+  const div = document.getElementById('proposals-result');
+  const cards = proposals.map(p => `
+    <div class="proposal-card" onclick="selectProposal(this, '${p.id}')">
+      <div class="proposal-name">${p.name}</div>
+      <div class="proposal-tagline">${p.tagline || ''}</div>
+      <div class="proposal-cost">$${(p.estimated_monthly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}<span style="font-size:0.85rem;color:var(--muted)">/mois</span></div>
+      <div class="proposal-meta">
+        <span class="tag complexity-${p.complexity}">${p.complexity}</span>
+        <span class="tag">${p.time_to_deploy || ''}</span>
+        <span class="tag">${p.stack?.warehouse || ''}</span>
+        <span class="tag">${p.stack?.orchestrator || ''}</span>
+      </div>
+      <div style="margin-top:12px; font-size:0.8rem;">
+        ${(p.pros||[]).slice(0,3).map(pr=>`<div style="color:var(--success);margin-bottom:2px;">✓ ${pr}</div>`).join('')}
+      </div>
+    </div>`).join('');
+  div.innerHTML = `<div class="proposal-grid">${cards}</div>`;
+}
+
+function selectProposal(el, id) {
+  document.querySelectorAll('.proposal-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  toast(`Proposition ${id} sélectionnée`, 'success');
+}
+
+// ============================================================
+// dbt generator
+// ============================================================
+async function generateDbt() {
+  const req = document.getElementById('dbt-request').value.trim() || 'Analyse des ventes';
+  const div = document.getElementById('dbt-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dbt/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('dbt-warehouse').value,
+        ingestion: document.getElementById('dbt-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dbt');
+    toast(`${data.file_count} fichiers dbt générés`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Airflow DAG generator
+// ============================================================
+async function generateDags() {
+  const req = document.getElementById('dag-request').value.trim() || 'Pipeline data';
+  const div = document.getElementById('dag-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dags/airflow/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        ingestion: document.getElementById('dag-ingestion').value,
+        transformation: document.getElementById('dag-transform').value,
+        quality: document.getElementById('dag-quality').value,
+        processing_mode: document.getElementById('dag-mode').value,
+        data_warehouse: 'snowflake',
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dags');
+    toast(`${data.dag_count} DAGs générés`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Dagster generator
+// ============================================================
+async function generateDagster() {
+  const req = document.getElementById('dagster-request').value.trim() || 'Pipeline analytics';
+  const div = document.getElementById('dagster-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dagster/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('dagster-warehouse').value,
+        ingestion: document.getElementById('dagster-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dagster');
+    toast(`Projet Dagster généré (${data.file_count} fichiers)`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Prefect generator
+// ============================================================
+async function generatePrefect() {
+  const req = document.getElementById('prefect-request').value.trim() || 'Pipeline analytics';
+  const div = document.getElementById('prefect-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/prefect/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('prefect-warehouse').value,
+        ingestion: document.getElementById('prefect-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'prefect');
+    toast(`Flows Prefect générés (${data.file_count} fichiers)`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// File list renderer
+// ============================================================
+function renderFileList(div, data, type) {
+  const files = data.files || {};
+  const keys = Object.keys(files);
+  const icons = { '.yml':'📄', '.yaml':'📄', '.py':'🐍', '.sql':'🗃', '.md':'📝', '.tf':'🏗', '.json':'📋', '.toml':'⚙' };
+  const getIcon = f => {
+    const ext = '.' + f.split('.').pop();
+    return icons[ext] || '📁';
+  };
+  const list = keys.map(k => `
+    <li style="cursor:pointer;" onclick="showFile('${k}', \`${escapeBacktick(files[k])}\`)">
+      <span class="artifact-icon">${getIcon(k)}</span>
+      <span style="font-size:0.82rem;">${k}</span>
+    </li>`).join('');
+
+  div.innerHTML = `
+    <div class="card">
+      <h3>${keys.length} fichiers générés</h3>
+      <ul class="artifact-list">${list}</ul>
+    </div>
+    <div id="file-preview-${type}" style="display:none; margin-top:16px;" class="card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <strong id="file-preview-name-${type}" style="font-size:0.9rem;"></strong>
+        <button class="btn btn-secondary btn-sm" onclick="copyFileContent('${type}')">📋 Copier</button>
+      </div>
+      <pre id="file-preview-content-${type}" style="max-height:400px; overflow-y:auto; font-size:0.78rem; color:var(--muted);"></pre>
+    </div>`;
+}
+
+function showFile(name, content) {
+  const preview = document.getElementById('file-preview-' + currentSubTab);
+  if (!preview) return;
+  preview.style.display = 'block';
+  document.getElementById('file-preview-name-' + currentSubTab).textContent = name;
+  document.getElementById('file-preview-content-' + currentSubTab).textContent = content;
+}
+
+function copyFileContent(type) {
+  const content = document.getElementById('file-preview-content-' + type)?.textContent || '';
+  navigator.clipboard.writeText(content).then(() => toast('Copié !', 'success'));
+}
+
+function escapeBacktick(s) {
+  return (s || '').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
+// ============================================================
+// Catalog
+// ============================================================
+async function loadCatalog() {
+  const div = document.getElementById('catalog-content');
+  if (div.dataset.loaded) return;
+
+  try {
+    const [stackRes, adapterRes] = await Promise.all([
+      fetch('/stacks/supported'),
+      fetch('/stacks/adapters'),
+    ]);
+    const stacks = await stackRes.json();
+    const adapters = await adapterRes.json();
+
+    const catLabels = {
+      warehouse:'Data Warehouse', orchestration:'Orchestration', ingestion:'Ingestion',
+      transformation:'Transformation', storage:'Storage', bi:'BI / Analytics',
+      quality:'Data Quality', catalog:'Data Catalog', ai:'AI / LLM',
+      vector:'Vector DB', monitoring:'Monitoring', security:'Sécurité', cloud:'Cloud',
+    };
+
+    const cards = Object.entries(stacks.categories || {}).map(([cat, tools]) => {
+      const registeredAdapters = (adapters.adapters || {})[cat] || [];
+      const toolList = tools.map(t => {
+        const hasAdapter = registeredAdapters.includes(t);
+        return `<span class="tag" style="margin:2px;${hasAdapter?'color:var(--success)':''}">${t}${hasAdapter?' ✓':''}</span>`;
+      }).join('');
+      return `<div class="card">
+        <h3>${catLabels[cat] || cat}</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${toolList}</div>
+      </div>`;
+    }).join('');
+
+    div.innerHTML = `
+      <div style="margin-bottom:16px;" class="text-muted">
+        <strong style="color:var(--success)">✓</strong> = adaptateur implémenté
+        &nbsp;|&nbsp; Total adaptateurs : <strong>${adapters.adapter_count}</strong>
+      </div>
+      <div class="grid-3">${cards}</div>`;
+    div.dataset.loaded = '1';
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Jobs history
+// ============================================================
+async function loadJobs() {
+  const div = document.getElementById('jobs-content');
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/jobs');
+    const jobs = await res.json();
+
+    if (!jobs.length) {
+      div.innerHTML = '<p class="text-muted" style="padding:20px;">Aucun job pour l\'instant.</p>';
+      return;
+    }
+
+    const statusColor = s => s === 'completed' ? 'var(--success)' : s === 'failed' ? 'var(--danger)' : 'var(--warning)';
+    const rows = jobs.map(j => `
+      <tr>
+        <td><code style="font-size:0.75rem;">${j.job_id.slice(0,8)}…</code></td>
+        <td><span style="color:${statusColor(j.status)}">${j.status}</span></td>
+        <td class="text-muted" style="font-size:0.8rem;">${new Date(j.created_at*1000).toLocaleString('fr-FR')}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="showJobDetail('${j.job_id}')">Détail</button></td>
+      </tr>`).join('');
+
+    div.innerHTML = `
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; font-size:0.82rem; color:var(--muted);">
+            <th style="padding:8px 0;">Job ID</th>
+            <th>Statut</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+async function showJobDetail(jobId) {
+  try {
+    const res = await fetch(`/jobs/${jobId}`);
+    const data = await res.json();
+    toast(`Job ${jobId.slice(0,8)}: ${data.status}`, data.status === 'completed' ? 'success' : 'error');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ============================================================
+// Toast
+// ============================================================
+let toastTimer = null;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type;
+  el.style.display = 'block';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Pre-warm catalog on load
+  setTimeout(loadCatalog, 500);
+});
+</script>
+</body>
+</html>

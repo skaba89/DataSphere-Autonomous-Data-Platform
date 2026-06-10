@@ -8,6 +8,8 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
@@ -17,17 +19,11 @@ from datasphere.agents.mode_router import run_explicit, run_recommended
 from datasphere.agents.proposer import generate_proposals
 from datasphere.generators.dbt_project import DbtProjectGenerator
 from datasphere.generators.airflow_dag import AirflowDagGenerator
+from datasphere.generators.dagster_job import DagsterJobGenerator
+from datasphere.generators.prefect_flow import PrefectFlowGenerator
+from datasphere.api.job_store import job_store
 
-
-# ---------------------------------------------------------------------------
-# In-memory job store (swappable for Redis/DB in production)
-# ---------------------------------------------------------------------------
-
-_jobs: dict[str, dict[str, Any]] = {}
-
-
-def _store_job(job_id: str, status: str, result: Any = None, error: str = "") -> None:
-    _jobs[job_id] = {"job_id": job_id, "status": status, "result": result, "error": error}
+_TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +114,7 @@ class DagGenerateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _run_generation(job_id: str, req: GenerateRequest) -> None:
+    job_store.update(job_id, status="running")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             if req.mode == "explicit":
@@ -157,9 +154,9 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
                 result = run_recommended(ctx, output_dir=tmp, verbose=False)
 
             serialized = _serialize_result(result)
-            _store_job(job_id, "completed", serialized)
+            job_store.update(job_id, status="completed", result=serialized)
     except Exception as exc:
-        _store_job(job_id, "failed", error=str(exc))
+        job_store.update(job_id, status="failed", error=str(exc))
 
 
 def _serialize_result(result: Any) -> dict:
@@ -224,6 +221,19 @@ def create_app() -> FastAPI:
     )
 
     # ------------------------------------------------------------------
+    # Web UI
+    # ------------------------------------------------------------------
+
+    @app.get("/ui", response_class=HTMLResponse, tags=["ui"], include_in_schema=False)
+    @app.get("/ui/", response_class=HTMLResponse, tags=["ui"], include_in_schema=False)
+    def web_ui() -> HTMLResponse:
+        """Interface web DataSphere."""
+        html_file = _TEMPLATE_DIR / "index.html"
+        if not html_file.exists():
+            return HTMLResponse("<h1>UI not found</h1>", status_code=404)
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+
+    # ------------------------------------------------------------------
     # Health
     # ------------------------------------------------------------------
 
@@ -235,14 +245,18 @@ def create_app() -> FastAPI:
     def root() -> dict:
         return {
             "name": "DataSphere Autonomous Data Platform",
+            "ui":   "/ui",
             "docs": "/docs",
             "health": "/health",
             "endpoints": [
+                "GET  /ui  → Interface web",
                 "POST /generate",
                 "GET  /jobs/{job_id}",
                 "POST /proposals",
                 "POST /dbt/generate",
                 "POST /dags/airflow/generate",
+                "POST /dagster/generate",
+                "POST /prefect/generate",
                 "GET  /stacks/supported",
             ],
         }
@@ -264,7 +278,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
         job_id = str(uuid.uuid4())
-        _store_job(job_id, "pending")
+        job_store.create(job_id, status="pending")
         background_tasks.add_task(_run_generation, job_id, req)
         return JobResponse(
             job_id=job_id,
@@ -283,9 +297,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
         job_id = str(uuid.uuid4())
-        _store_job(job_id, "pending")
+        job_store.create(job_id, status="pending")
         _run_generation(job_id, req)
-        job = _jobs.get(job_id, {})
+        job = job_store.get(job_id) or {}
         if job.get("status") == "failed":
             raise HTTPException(status_code=500, detail=job.get("error", "Generation failed"))
         return job.get("result", {})
@@ -297,15 +311,34 @@ def create_app() -> FastAPI:
     @app.get("/jobs/{job_id}", response_model=JobStatusResponse, tags=["generation"])
     def get_job(job_id: str) -> JobStatusResponse:
         """Récupère le statut et le résultat d'un job de génération."""
-        job = _jobs.get(job_id)
+        job = job_store.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
-        return JobStatusResponse(**job)
+        return JobStatusResponse(
+            job_id=job["job_id"],
+            status=job["status"],
+            result=job.get("result"),
+            error=job.get("error", ""),
+        )
 
     @app.get("/jobs", tags=["generation"])
     def list_jobs() -> list[dict]:
-        """Liste tous les jobs (en mémoire — non persistant)."""
-        return [{"job_id": jid, "status": j["status"]} for jid, j in _jobs.items()]
+        """Liste tous les jobs (persistés dans SQLite)."""
+        return job_store.list_all()
+
+    @app.delete("/jobs/{job_id}", tags=["generation"])
+    def delete_job(job_id: str) -> dict:
+        """Supprime un job de l'historique."""
+        if not job_store.get(job_id):
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        job_store.delete(job_id)
+        return {"deleted": job_id}
+
+    @app.post("/jobs/purge", tags=["generation"])
+    def purge_jobs(max_age_hours: int = 24) -> dict:
+        """Supprime les jobs plus vieux que max_age_hours."""
+        deleted = job_store.purge_old(max_age_hours * 3600)
+        return {"deleted_count": deleted}
 
     # ------------------------------------------------------------------
     # Proposals (Mode 2)
@@ -423,6 +456,66 @@ def create_app() -> FastAPI:
         return {
             "dag_count": len([k for k in dags.files if k.endswith(".py")]),
             "files":     dags.files,
+        }
+
+    # ------------------------------------------------------------------
+    # Dagster project generation
+    # ------------------------------------------------------------------
+
+    @app.post("/dagster/generate", tags=["generators"])
+    def generate_dagster_project(req: DbtGenerateRequest) -> dict:
+        """Génère un projet Dagster complet avec SDA, jobs, schedules et sensors."""
+        constraints = ArchitectureConstraints(
+            cloud_provider=req.cloud_provider,
+            data_warehouse=req.data_warehouse,
+            orchestrator="dagster",
+            ingestion=req.ingestion,
+            transformation=req.transformation,
+            bi_tool=req.bi_tool,
+            deployment=req.deployment,
+            security=req.security,
+            budget=req.budget,
+            data_lake=None,
+            catalog=None,
+            quality=None,
+        )
+        gen = DagsterJobGenerator()
+        project = gen.generate(req.business_request, constraints)
+        return {
+            "project_name": gen._slug(req.business_request),
+            "warehouse":    req.data_warehouse,
+            "file_count":   len(project.files),
+            "files":        project.files,
+        }
+
+    # ------------------------------------------------------------------
+    # Prefect flow generation
+    # ------------------------------------------------------------------
+
+    @app.post("/prefect/generate", tags=["generators"])
+    def generate_prefect_flows(req: DbtGenerateRequest) -> dict:
+        """Génère des flows Prefect avec tasks, deployments et blocks."""
+        constraints = ArchitectureConstraints(
+            cloud_provider=req.cloud_provider,
+            data_warehouse=req.data_warehouse,
+            orchestrator="prefect",
+            ingestion=req.ingestion,
+            transformation=req.transformation,
+            bi_tool=req.bi_tool,
+            deployment=req.deployment,
+            security=req.security,
+            budget=req.budget,
+            data_lake=None,
+            catalog=None,
+            quality=None,
+        )
+        gen = PrefectFlowGenerator()
+        flows = gen.generate(req.business_request, constraints)
+        return {
+            "project_name": gen._slug(req.business_request),
+            "warehouse":    req.data_warehouse,
+            "file_count":   len(flows.files),
+            "files":        flows.files,
         }
 
     # ------------------------------------------------------------------
