@@ -159,5 +159,109 @@ from datasphere.cli.run_agents import run_agents
 main.add_command(run_agents, name="run")
 
 
+@main.command()
+@click.option("--host", default="0.0.0.0", help="Adresse d'écoute")
+@click.option("--port", "-p", default=8000, type=int, help="Port")
+@click.option("--reload", is_flag=True, default=False, help="Auto-reload (développement)")
+@click.option("--workers", default=1, type=int, help="Nombre de workers")
+def api(host: str, port: int, reload: bool, workers: int):
+    """Lance l'API REST DataSphere (FastAPI + Uvicorn)."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print("[red]uvicorn non installé — pip install datasphere[api][/red]")
+        sys.exit(1)
+
+    console.print(Panel.fit(
+        f"[bold green]DataSphere API[/bold green]\n"
+        f"[dim]http://{host}:{port}  |  docs → http://{host}:{port}/docs[/dim]",
+        border_style="green",
+    ))
+    uvicorn.run(
+        "datasphere.api.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        workers=1 if reload else workers,
+        log_level="info",
+    )
+
+
+@main.command("dbt-generate")
+@click.option("--request", "-r", required=True, help="Besoin métier")
+@click.option("--warehouse", "-w", default="snowflake", help="Data warehouse cible")
+@click.option("--ingestion", "-i", default="airbyte", help="Outil d'ingestion")
+@click.option("--output", "-o", default="./dbt", help="Répertoire de sortie")
+def dbt_generate(request: str, warehouse: str, ingestion: str, output: str):
+    """Génère un scaffold dbt complet (modèles, tests, profiles)."""
+    from datasphere.generators.dbt_project import DbtProjectGenerator
+    from datasphere.models.request import ArchitectureConstraints
+
+    constraints = ArchitectureConstraints(
+        cloud_provider="aws",
+        data_warehouse=warehouse,
+        orchestrator="airflow",
+        ingestion=ingestion,
+        transformation="dbt",
+        bi_tool="superset",
+        deployment="kubernetes",
+        security=["RBAC"],
+        budget="medium",
+        data_lake=None,
+        catalog=None,
+        quality=None,
+    )
+    gen = DbtProjectGenerator()
+    project = gen.generate(request, constraints)
+    written = project.write(output)
+
+    console.print(f"\n[bold green]✓ Projet dbt généré dans {output}/dbt/[/bold green]")
+    console.print(f"  [dim]{len(written)} fichiers créés[/dim]")
+    console.print("\n[bold]Démarrage rapide :[/bold]")
+    console.print(f"  cd {output}/dbt && pip install dbt-{warehouse.replace('-', '_')} && dbt deps && dbt debug")
+
+
+@main.command("dag-generate")
+@click.option("--request", "-r", required=True, help="Besoin métier")
+@click.option("--orchestrator", default="airflow", help="Orchestrateur (airflow)")
+@click.option("--ingestion", "-i", default="airbyte", help="Outil d'ingestion")
+@click.option("--transformation", "-t", default="dbt", help="Outil de transformation")
+@click.option("--warehouse", "-w", default="snowflake", help="Data warehouse")
+@click.option("--output", "-o", default="./dags", help="Répertoire de sortie")
+def dag_generate(request: str, orchestrator: str, ingestion: str, transformation: str,
+                 warehouse: str, output: str):
+    """Génère les DAGs Airflow Python pour le pipeline et la qualité."""
+    if orchestrator.lower() not in ("airflow",):
+        console.print(f"[yellow]DAG generation disponible uniquement pour Airflow (reçu: {orchestrator})[/yellow]")
+        return
+
+    from datasphere.generators.airflow_dag import AirflowDagGenerator
+    from datasphere.models.request import ArchitectureConstraints
+
+    constraints = ArchitectureConstraints(
+        cloud_provider="aws",
+        data_warehouse=warehouse,
+        orchestrator=orchestrator,
+        ingestion=ingestion,
+        transformation=transformation,
+        bi_tool="superset",
+        deployment="kubernetes",
+        security=["RBAC"],
+        budget="medium",
+        data_lake=None,
+        catalog=None,
+        quality="great-expectations",
+    )
+    gen = AirflowDagGenerator()
+    dags = gen.generate(request, constraints)
+    written = dags.write(output)
+
+    console.print(f"\n[bold green]✓ DAGs générés dans {output}/dags/[/bold green]")
+    console.print(f"  [dim]{len(written)} fichiers créés[/dim]")
+    for path in written:
+        if path.endswith(".py"):
+            console.print(f"  • {path}")
+
+
 if __name__ == "__main__":
     main()

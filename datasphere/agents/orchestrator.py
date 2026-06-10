@@ -31,6 +31,8 @@ from datasphere.agents.deployment import DeploymentAgent
 from datasphere.models.request import BusinessRequest, ArchitectureConstraints
 from datasphere.models.output import AgentOutput, OrchestratorOutput
 from datasphere.models.conversation import ArchitectureProposal, ConversationState
+from datasphere.generators.dbt_project import DbtProjectGenerator
+from datasphere.generators.airflow_dag import AirflowDagGenerator
 
 console = Console()
 
@@ -301,6 +303,31 @@ def _write_artifacts(
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 filepath.write_text(content, encoding="utf-8")
 
+    # Generate dbt project scaffold
+    try:
+        dbt_files = DbtProjectGenerator().generate(
+            result.request_summary, proposal.constraints
+        )
+        for rel_path, content in dbt_files.files.items():
+            filepath = base / "dbt" / rel_path
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content, encoding="utf-8")
+    except Exception:
+        pass
+
+    # Generate Airflow DAGs if orchestrator is Airflow
+    if proposal.constraints.orchestrator.lower() in ("airflow", "apache airflow"):
+        try:
+            dag_files = AirflowDagGenerator().generate(
+                result.request_summary, proposal.constraints
+            )
+            for rel_path, content in dag_files.files.items():
+                filepath = base / "dags" / rel_path
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                filepath.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+
     (base / "README.md").write_text(_build_index(result, proposal), encoding="utf-8")
     return str(base)
 
@@ -324,6 +351,22 @@ def _build_index(result: OrchestratorOutput, proposal: ArchitectureProposal) -> 
             for filename in agent_output.artifacts:
                 lines.append(f"- [{filename}]({filename})")
             lines.append("")
+
+    lines += [
+        "### dbt Project",
+        "- [dbt/dbt_project.yml](dbt/dbt_project.yml)",
+        "- [dbt/profiles.yml](dbt/profiles.yml)",
+        "- [dbt/models/staging/](dbt/models/staging/)",
+        "- [dbt/models/marts/](dbt/models/marts/)",
+        "",
+    ]
+
+    if c.orchestrator.lower() in ("airflow", "apache airflow"):
+        lines += [
+            "### Airflow DAGs",
+            "- [dags/](dags/)",
+            "",
+        ]
 
     if result.cost_optimization:
         co = result.cost_optimization
