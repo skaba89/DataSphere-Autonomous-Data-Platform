@@ -155,5 +155,9 @@ def status(stack_file: str):
     console.print(table)
 
 
+from datasphere.cli.run_agents import run_agents
+main.add_command(run_agents, name="run")
+
+
 if __name__ == "__main__":
     main()
