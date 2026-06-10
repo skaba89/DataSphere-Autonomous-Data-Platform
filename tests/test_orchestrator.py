@@ -229,7 +229,7 @@ class TestOrchestrator:
         examples = Path("examples")
         if not examples.exists():
             pytest.skip("examples/ not found")
-        for json_file in examples.glob("*.json"):
+        for json_file in examples.glob("request_*.json"):
             data = json.loads(json_file.read_text())
             req = BusinessRequest(**data)
             result = AgentOrchestrator().run(req, output_dir=str(tmp_path / json_file.stem), verbose=False)

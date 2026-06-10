@@ -1,0 +1,14 @@
+{
+  "mode": "recommended",
+  "business_request": "Plateforme analytique données de santé — 15 hôpitaux",
+  "budget": "enterprise",
+  "data_volume": "large",
+  "security_level": "enterprise",
+  "team_size": "large",
+  "processing_mode": "batch",
+  "cloud_preference": "azure",
+  "deployment_preference": "kubernetes",
+  "must_be_open_source": false,
+  "existing_tools": ["postgresql", "airflow"],
+  "compliance_requirements": ["HDS", "RGPD"]
+}

@@ -285,6 +285,84 @@ def _proposal_lightweight(raw: dict, idx: int) -> ArchitectureProposal:
 
 
 # ---------------------------------------------------------------------------
+# Team & context scoring (Mode 2 only)
+# ---------------------------------------------------------------------------
+
+def _apply_team_scoring(
+    proposals: list[ArchitectureProposal],
+    ctx,  # RecommendationContext — avoid circular import
+) -> list[ArchitectureProposal]:
+    """
+    Re-orders and annotates proposals based on team size, existing tools,
+    open-source constraint and compliance requirements.
+    """
+    from datasphere.models.modes import RecommendationContext
+    if not isinstance(ctx, RecommendationContext):
+        return proposals
+
+    scored: list[tuple[float, ArchitectureProposal]] = []
+
+    for p in proposals:
+        score = 0.0
+
+        # Team size affinity
+        team = ctx.team_size
+        complexity = p.complexity
+        if team == "solo" and complexity == "low":
+            score += 2.0
+        elif team == "solo" and complexity == "high":
+            score -= 2.0
+        elif team == "large" and complexity == "high":
+            score += 1.0
+        elif team in ("small", "medium") and complexity == "medium":
+            score += 1.0
+
+        # Open-source constraint
+        if ctx.must_be_open_source:
+            saas_tools = {"snowflake", "databricks", "fivetran-like", "tableau", "powerbi"}
+            c = p.constraints
+            stack_tools = {c.data_warehouse, c.bi_tool, c.ingestion}
+            if stack_tools & saas_tools:
+                score -= 5.0  # effectively filters it out
+            else:
+                score += 2.0
+                p.pros.append("✓ 100% open-source — conforme à votre contrainte")
+
+        # Existing tools bonus
+        existing = {t.lower().strip() for t in ctx.existing_tools}
+        c = p.constraints
+        stack_set = {
+            c.data_warehouse, c.orchestrator, c.ingestion,
+            c.transformation, c.bi_tool,
+        }
+        overlap = existing & {t.lower() for t in stack_set}
+        if overlap:
+            score += len(overlap) * 1.5
+            p.pros.append(f"✓ Réutilise vos outils existants : {', '.join(overlap)}")
+
+        # Compliance requirements
+        compliance = {r.lower() for r in ctx.compliance_requirements}
+        if "hds" in compliance or "hipaa" in compliance:
+            if ctx.cloud_preference in ("none", "local-docker", "on-premise", "kubernetes"):
+                score += 1.5
+                p.pros.append("✓ Données hébergées sur votre infra — conforme HDS/HIPAA")
+        if "pci-dss" in compliance:
+            if "vault" in [s.lower() for s in p.constraints.security]:
+                score += 1.0
+
+        scored.append((score, p))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    result = [p for _, p in scored]
+
+    # Re-number IDs after reordering
+    for i, p in enumerate(result, 1):
+        p.id = i
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
