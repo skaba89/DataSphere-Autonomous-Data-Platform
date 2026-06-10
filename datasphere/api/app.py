@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,8 @@ from datasphere.generators.airflow_dag import AirflowDagGenerator
 from datasphere.generators.dagster_job import DagsterJobGenerator
 from datasphere.generators.prefect_flow import PrefectFlowGenerator
 from datasphere.api.job_store import job_store
+from datasphere.api.auth import require_auth, auth_status
+from datasphere.api.sse import make_sse_response
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -239,24 +241,27 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["system"])
     def health() -> dict:
-        return {"status": "ok", "version": "1.0.0", "timestamp": time.time()}
+        return {"status": "ok", "version": "1.1.0", "timestamp": time.time(), **auth_status()}
 
     @app.get("/", tags=["system"])
     def root() -> dict:
         return {
             "name": "DataSphere Autonomous Data Platform",
+            "version": "1.1.0",
             "ui":   "/ui",
             "docs": "/docs",
             "health": "/health",
             "endpoints": [
                 "GET  /ui  → Interface web",
                 "POST /generate",
+                "GET  /generate/stream?job_id=<id>  → SSE streaming",
                 "GET  /jobs/{job_id}",
                 "POST /proposals",
                 "POST /dbt/generate",
                 "POST /dags/airflow/generate",
                 "POST /dagster/generate",
                 "POST /prefect/generate",
+                "POST /terraform/generate",
                 "GET  /stacks/supported",
             ],
         }
@@ -265,8 +270,24 @@ def create_app() -> FastAPI:
     # Async generation
     # ------------------------------------------------------------------
 
+    @app.get("/generate/stream", tags=["generation"])
+    async def stream_generate(job_id: str = Query(..., description="Job ID from POST /generate")) -> StreamingResponse:
+        """
+        Streaming SSE endpoint — yields progress events for an existing job.
+
+        Connect with `EventSource('/generate/stream?job_id=<id>')`.
+        Events: `status`, `log`, `done`, `error`.
+        """
+        if not job_store.get(job_id):
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        return make_sse_response(job_id)
+
     @app.post("/generate", response_model=JobResponse, tags=["generation"])
-    async def generate(req: GenerateRequest, background_tasks: BackgroundTasks) -> JobResponse:
+    async def generate(
+        req: GenerateRequest,
+        background_tasks: BackgroundTasks,
+        _: None = Depends(require_auth),
+    ) -> JobResponse:
         """
         Lance la génération asynchrone d'une architecture data complète.
 
@@ -287,7 +308,7 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/generate/sync", tags=["generation"])
-    async def generate_sync(req: GenerateRequest) -> dict:
+    async def generate_sync(req: GenerateRequest, _: None = Depends(require_auth)) -> dict:
         """
         Génération synchrone (bloquante). Pour les petites architectures ou tests.
         """
@@ -516,6 +537,41 @@ def create_app() -> FastAPI:
             "warehouse":    req.data_warehouse,
             "file_count":   len(flows.files),
             "files":        flows.files,
+        }
+
+    # ------------------------------------------------------------------
+    # Terraform / IaC generation
+    # ------------------------------------------------------------------
+
+    @app.post("/terraform/generate", tags=["generators"])
+    def generate_terraform(req: DagGenerateRequest) -> dict:
+        """Génère un projet Terraform complet (providers, modules networking/warehouse/k8s/IAM)."""
+        try:
+            from datasphere.generators.terraform import TerraformGenerator
+        except ImportError as exc:
+            raise HTTPException(status_code=503, detail=f"TerraformGenerator not available: {exc}")
+        constraints = ArchitectureConstraints(
+            cloud_provider=req.cloud_provider,
+            data_warehouse=req.data_warehouse,
+            orchestrator=req.orchestrator,
+            ingestion=req.ingestion,
+            transformation=req.transformation,
+            bi_tool=req.bi_tool,
+            deployment=req.deployment,
+            security=req.security,
+            budget=req.budget,
+            data_lake=None,
+            catalog=None,
+            quality=req.quality,
+            processing_mode=req.processing_mode,
+        )
+        gen = TerraformGenerator()
+        project = gen.generate(req.business_request, constraints)
+        return {
+            "provider":   req.cloud_provider,
+            "warehouse":  req.data_warehouse,
+            "file_count": len(project.files),
+            "files":      project.files,
         }
 
     # ------------------------------------------------------------------
