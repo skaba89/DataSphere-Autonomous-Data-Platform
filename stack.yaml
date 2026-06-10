@@ -1,0 +1,82 @@
+# DataSphere Stack Configuration
+# Run 'datasphere wizard' to configure interactively
+
+platform:
+  name: "my-datasphere"
+  environment: "development"
+  version: "1.0.0"
+
+cloud:
+  provider: "local-docker"
+
+warehouse:
+  type: "postgresql"
+  host: "${WAREHOUSE_HOST:-localhost}"
+  port: 5432
+  database: "${WAREHOUSE_DB:-datasphere}"
+  username: "${WAREHOUSE_USER:-datasphere}"
+  password: "${WAREHOUSE_PASSWORD}"
+
+orchestration:
+  type: "airflow"
+  host: "localhost"
+  port: 8080
+  username: "${AIRFLOW_USER:-airflow}"
+  password: "${AIRFLOW_PASSWORD}"
+
+ingestion:
+  type: "airbyte"
+  host: "localhost"
+  port: 8000
+
+transformation:
+  type: "dbt"
+  extra:
+    profiles_dir: "./dbt"
+    project_dir: "./dbt"
+
+storage:
+  type: "minio"
+  host: "localhost"
+  port: 9000
+  username: "${MINIO_ROOT_USER:-minioadmin}"
+  password: "${MINIO_ROOT_PASSWORD}"
+
+bi:
+  type: "superset"
+  host: "localhost"
+  port: 8088
+  username: "${SUPERSET_USER:-admin}"
+  password: "${SUPERSET_PASSWORD}"
+
+quality:
+  type: "great-expectations"
+
+catalog:
+  type: "openmetadata"
+  host: "localhost"
+  port: 8585
+  password: "${OPENMETADATA_JWT_TOKEN}"
+
+ai:
+  type: "openai"
+  password: "${OPENAI_API_KEY}"
+
+vector:
+  type: "qdrant"
+  host: "localhost"
+  port: 6333
+
+infrastructure:
+  type: "docker-compose"
+
+monitoring:
+  type: "prometheus"
+  host: "localhost"
+  port: 9090
+
+security:
+  type: "vault"
+  host: "localhost"
+  port: 8200
+  password: "${VAULT_TOKEN}"

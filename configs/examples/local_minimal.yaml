@@ -1,0 +1,69 @@
+platform:
+  name: "local-minimal"
+  environment: "development"
+  version: "1.0.0"
+
+cloud:
+  provider: "local-docker"
+
+warehouse:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  database: "datasphere"
+  username: "datasphere"
+  password: "${POSTGRES_PASSWORD}"
+
+orchestration:
+  type: "airflow"
+  host: "localhost"
+  port: 8080
+
+ingestion:
+  type: "airbyte"
+  host: "localhost"
+  port: 8000
+
+transformation:
+  type: "dbt"
+
+storage:
+  type: "minio"
+  host: "localhost"
+  port: 9000
+
+bi:
+  type: "superset"
+  host: "localhost"
+  port: 8088
+
+quality:
+  type: "great-expectations"
+
+catalog:
+  type: "openmetadata"
+  host: "localhost"
+  port: 8585
+
+ai:
+  type: "ollama"
+  host: "localhost"
+  port: 11434
+
+vector:
+  type: "qdrant"
+  host: "localhost"
+  port: 6333
+
+infrastructure:
+  type: "docker-compose"
+
+monitoring:
+  type: "prometheus"
+  host: "localhost"
+  port: 9090
+
+security:
+  type: "vault"
+  host: "localhost"
+  port: 8200

@@ -1,0 +1,65 @@
+platform:
+  name: "on-premise-k8s"
+  environment: "production"
+  version: "1.0.0"
+
+cloud:
+  provider: "kubernetes"
+  extra:
+    kubeconfig: "~/.kube/config"
+    namespace: "datasphere"
+
+warehouse:
+  type: "postgresql"
+  host: "postgresql.datasphere.svc.cluster.local"
+  port: 5432
+  database: "datasphere"
+  username: "datasphere"
+  password: "${POSTGRES_PASSWORD}"
+
+orchestration:
+  type: "argo"
+  host: "argo-server.datasphere.svc.cluster.local"
+  port: 2746
+
+ingestion:
+  type: "meltano"
+
+transformation:
+  type: "sqlmesh"
+
+storage:
+  type: "minio"
+  host: "minio.datasphere.svc.cluster.local"
+  port: 9000
+
+bi:
+  type: "metabase"
+
+quality:
+  type: "dbt-tests"
+
+catalog:
+  type: "amundsen"
+
+ai:
+  type: "ollama"
+  host: "ollama.datasphere.svc.cluster.local"
+  port: 11434
+
+vector:
+  type: "milvus"
+
+infrastructure:
+  type: "helm"
+  extra:
+    chart: "infra/helm/datasphere"
+    namespace: "datasphere"
+
+monitoring:
+  type: "prometheus"
+
+security:
+  type: "vault"
+  host: "vault.datasphere.svc.cluster.local"
+  port: 8200

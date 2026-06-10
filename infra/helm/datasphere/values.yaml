@@ -1,0 +1,79 @@
+global:
+  imageRegistry: ""
+  storageClass: ""
+  imagePullSecrets: []
+
+platform:
+  name: datasphere
+  environment: production
+  replicaCount: 1
+
+postgresql:
+  enabled: true
+  auth:
+    database: datasphere
+    username: datasphere
+    existingSecret: datasphere-postgresql-secret
+  primary:
+    persistence:
+      size: 20Gi
+
+minio:
+  enabled: true
+  auth:
+    existingSecret: datasphere-minio-secret
+  persistence:
+    size: 50Gi
+
+airflow:
+  enabled: false
+  executor: KubernetesExecutor
+  dags:
+    persistence:
+      enabled: true
+      size: 5Gi
+
+superset:
+  enabled: false
+  extraEnv:
+    SUPERSET_SECRET_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: datasphere-superset-secret
+          key: secret-key
+
+qdrant:
+  enabled: false
+  persistence:
+    size: 10Gi
+
+vault:
+  enabled: false
+  server:
+    dev:
+      enabled: false
+    ha:
+      enabled: true
+      replicas: 3
+
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      size: 20Gi
+
+grafana:
+  enabled: true
+  adminPassword: ""
+  persistence:
+    enabled: true
+    size: 5Gi
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: datasphere.example.com
+      paths:
+        - path: /
+          pathType: Prefix
