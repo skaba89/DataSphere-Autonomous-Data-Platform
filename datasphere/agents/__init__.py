@@ -6,6 +6,8 @@ from datasphere.agents.cost_optimization import CostOptimizationAgent
 from datasphere.agents.security_compliance import SecurityComplianceAgent
 from datasphere.agents.deployment import DeploymentAgent
 from datasphere.agents.orchestrator import AgentOrchestrator
+from datasphere.agents.proposer import generate_proposals
+from datasphere.agents.dialogue import collect_constraints
 
 __all__ = [
     "BaseAgent",
@@ -16,4 +18,7 @@ __all__ = [
     "SecurityComplianceAgent",
     "DeploymentAgent",
     "AgentOrchestrator",
+    "generate_proposals",
+    "collect_constraints",
 ]
+
