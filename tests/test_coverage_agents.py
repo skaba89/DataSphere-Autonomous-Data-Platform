@@ -348,7 +348,7 @@ class TestCostOptimizationEdgeCases:
         ))
         result = agent.run(req)
         assert result.success is True
-        assert result.metadata.get("total_monthly_usd", 0) > 0
+        assert result.total_monthly_usd > 0
 
 
 # ---------------------------------------------------------------------------
