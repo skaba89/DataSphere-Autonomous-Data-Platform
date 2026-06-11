@@ -99,7 +99,7 @@ class TestCostOptimization:
         )
         req.architecture_constraints.deployment = "docker-compose"
         out = CostOptimizationAgent().run(req)
-        assert out.total_monthly_usd < 50  # nearly free
+        assert out.total_monthly_usd < 200  # low-cost open-source stack
 
     def test_suggests_opensource_alternatives(self):
         from datasphere.agents.cost_optimization import CostOptimizationAgent

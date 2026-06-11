@@ -2,6 +2,7 @@ from __future__ import annotations
 from datasphere.agents.base_agent import BaseAgent
 from datasphere.models.request import BusinessRequest
 from datasphere.models.output import AgentOutput, CostOptimizationOutput, CostEstimate
+from datasphere.agents.cost_tables import CostCalculator
 
 # Monthly USD estimates per tool/tier (medium volume baseline)
 COST_TABLE: dict[str, dict[str, float]] = {
@@ -111,62 +112,65 @@ class CostOptimizationAgent(BaseAgent):
         c = self._constraints(request)
         budget = c.budget
 
-        tools = {
-            "Warehouse":      c.data_warehouse,
-            "Ingestion":      c.ingestion,
-            "Orchestration":  c.orchestrator,
-            "Transformation": c.transformation,
-            "Storage":        c.data_lake or "minio",
-            "BI":             c.bi_tool,
-            "Quality":        c.quality or "great-expectations",
-            "Catalog":        c.catalog or "openmetadata",
-            "Infrastructure": c.deployment.lower().replace(" ", "-"),
+        # Build a stack dict for the CostCalculator
+        stack = {
+            "cloud_provider":   c.cloud_provider,
+            "data_warehouse":   c.data_warehouse,
+            "ingestion":        c.ingestion,
+            "orchestrator":     c.orchestrator,
+            "transformation":   c.transformation,
+            "bi_tool":          c.bi_tool,
+            "quality":          c.quality or "great-expectations",
+            "catalog":          c.catalog or "openmetadata",
         }
 
-        estimates: list[CostEstimate] = []
-        total = 0.0
+        calculator = CostCalculator()
+        breakdown = calculator.calculate(stack, budget)
 
-        for layer, tool in tools.items():
-            tool_key = tool.lower().replace(" ", "-")
-            costs = COST_TABLE.get(tool_key, {})
-            cost = costs.get(budget, 0.0)
+        # Volume multiplier applied on top of CostCalculator's base estimate
+        vol_mult = {"small": 0.5, "medium": 1.0, "large": 2.5, "xlarge": 8.0}.get(
+            c.data_volume, 1.0
+        )
+        # Realtime surcharge
+        realtime_mult = 1.4 if c.processing_mode == "realtime" else 1.0
 
-            # Volume multiplier
-            vol_mult = {"small": 0.5, "medium": 1.0, "large": 2.5, "xlarge": 8.0}.get(c.data_volume, 1.0)
-            # Realtime adds ~40%
-            if c.processing_mode == "realtime" and layer in ("Ingestion", "Transformation"):
-                vol_mult *= 1.4
+        # Re-apply multiplier to line items
+        for item in breakdown.line_items:
+            mult = vol_mult
+            if c.processing_mode == "realtime" and item.component in ("ingestion", "transformation"):
+                mult *= realtime_mult
+            item.monthly_usd = round(item.monthly_usd * mult, 2)
+            item.yearly_usd = round(item.monthly_usd * 12, 2)
 
-            final = round(cost * vol_mult, 2)
-            total += final
+        total = round(sum(i.monthly_usd for i in breakdown.line_items), 2)
 
-            note = self._cost_note(tool_key, c.cloud_provider, budget, cost)
-            estimates.append(CostEstimate(
-                service=f"{layer}: {tool}",
-                monthly_usd=final,
+        # Backwards-compat CostEstimate list
+        estimates: list[CostEstimate] = [
+            CostEstimate(
+                service=f"{item.component}: {item.tool}",
+                monthly_usd=item.monthly_usd,
                 tier=budget,
-                notes=note,
-            ))
+                notes=item.notes,
+            )
+            for item in breakdown.line_items
+        ]
 
-        # Optimizations
-        optimizations = []
+        # Legacy optimizations: keep cloud tips + open-source alternatives
+        optimizations: list[str] = list(breakdown.savings_tips)
         alternative_stack: dict[str, str] | None = None
         savings = 0.0
 
         for tool, alt in OPEN_SOURCE_ALTERNATIVES.items():
-            if tool in tools.values():
+            if tool in stack.values():
                 tool_cost = COST_TABLE.get(tool, {}).get(budget, 0)
                 alt_cost = COST_TABLE.get(alt, {}).get(budget, 0)
                 saving = round((tool_cost - alt_cost), 2)
                 if saving > 0:
-                    optimizations.append(
-                        f"Remplacez {tool} par {alt} → économie estimée : ${saving}/mois"
-                    )
                     savings += saving
                     if alternative_stack is None:
                         alternative_stack = {}
-                    for layer, t in tools.items():
-                        if t.lower().replace(" ", "-") == tool:
+                    for layer, t in stack.items():
+                        if t and t.lower().replace(" ", "-") == tool:
                             alternative_stack[layer] = alt
 
         cloud_tip = SAVINGS_TIPS.get(c.cloud_provider, "")
@@ -180,11 +184,22 @@ class CostOptimizationAgent(BaseAgent):
 
         output = CostOptimizationOutput(
             estimates=estimates,
-            total_monthly_usd=round(total, 2),
+            total_monthly_usd=total,
             total_yearly_usd=round(total * 12, 2),
             optimizations=optimizations,
             alternative_stack=alternative_stack,
             savings_usd=round(savings, 2),
+            line_items=[
+                {
+                    "component":   item.component,
+                    "tool":        item.tool,
+                    "monthly_usd": item.monthly_usd,
+                    "yearly_usd":  item.yearly_usd,
+                    "notes":       item.notes,
+                }
+                for item in breakdown.line_items
+            ],
+            savings_tips=breakdown.savings_tips,
         )
         output.artifacts["cost_report.md"] = self._render(request, estimates, total, optimizations, savings)
         return output

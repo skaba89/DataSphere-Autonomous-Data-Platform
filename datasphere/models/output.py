@@ -56,6 +56,8 @@ class CostOptimizationOutput(AgentOutput):
     optimizations: list[str] = field(default_factory=list)
     alternative_stack: Optional[dict[str, str]] = None
     savings_usd: float = 0.0
+    line_items: list[Any] = field(default_factory=list)
+    savings_tips: list[str] = field(default_factory=list)
 
 
 @dataclass

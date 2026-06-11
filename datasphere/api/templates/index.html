@@ -856,6 +856,67 @@
     </div>
   </div>
 
+    <!-- Costs -->
+    <div id="subtab-costs" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <h3>Estimer les coûts de la stack</h3>
+          <div class="field">
+            <label>Stack JSON</label>
+            <textarea id="costs-stack" rows="12" style="font-family:monospace; font-size:0.8rem;">{
+  "cloud_provider": "aws",
+  "data_warehouse": "snowflake",
+  "orchestrator": "airflow",
+  "ingestion": "fivetran",
+  "transformation": "dbt",
+  "bi_tool": "tableau",
+  "quality": "great-expectations",
+  "catalog": "datahub"
+}</textarea>
+          </div>
+          <div class="field">
+            <label>Budget</label>
+            <select id="costs-budget">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="estimateCosts()">💰 Estimer les coûts</button>
+        </div>
+        <div id="costs-result" style="display:none;">
+          <div class="card">
+            <div style="margin-bottom:18px;">
+              <div style="font-size:0.82rem; color:var(--muted); margin-bottom:4px;">Coût mensuel estimé</div>
+              <div id="costs-monthly" class="cost-big"></div>
+              <div id="costs-yearly" style="font-size:1rem; color:var(--muted); margin-top:4px;"></div>
+            </div>
+
+            <h3 style="margin-bottom:12px;">Détail par composant</h3>
+            <table id="costs-table" style="width:100%; border-collapse:collapse; font-size:0.84rem; margin-bottom:20px;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+                  <th style="text-align:left; padding:6px 8px;">Composant</th>
+                  <th style="text-align:left; padding:6px 8px;">Outil</th>
+                  <th style="text-align:right; padding:6px 8px;">$/mois</th>
+                  <th style="text-align:left; padding:6px 8px;">Notes</th>
+                </tr>
+              </thead>
+              <tbody id="costs-table-body"></tbody>
+            </table>
+
+            <div id="costs-tips-section" style="display:none; margin-bottom:20px;">
+              <h3 style="margin-bottom:10px;">Conseils d'économies</h3>
+              <ul id="costs-tips" style="list-style:none; padding:0;"></ul>
+            </div>
+
+            <h3 style="margin-bottom:12px;">Comparaison multi-cloud</h3>
+            <div id="costs-comparison" style="display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   <!-- ================================================================
        TAB: CATALOG
   ================================================================ -->
@@ -1621,6 +1682,90 @@ async function analyzeMigration() {
     resultEl.innerHTML = html;
   } catch(e) {
     resultEl.innerHTML = `<div class="card" style="color:var(--error,#ef4444);">Erreur: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// Cost estimation
+// ============================================================
+async function estimateCosts() {
+  const resultEl = document.getElementById('costs-result');
+  const stackJson = document.getElementById('costs-stack').value;
+  const budget = document.getElementById('costs-budget').value;
+  let stack;
+  try { stack = JSON.parse(stackJson); } catch(e) {
+    alert('JSON invalide: ' + e.message); return;
+  }
+  resultEl.style.display = 'block';
+  document.getElementById('costs-monthly').textContent = '...';
+  document.getElementById('costs-yearly').textContent = '';
+  document.getElementById('costs-table-body').innerHTML = '';
+  document.getElementById('costs-tips').innerHTML = '';
+  document.getElementById('costs-comparison').innerHTML = '';
+  try {
+    const res = await fetch('/costs/estimate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stack, budget}),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur serveur');
+    const data = await res.json();
+
+    document.getElementById('costs-monthly').textContent = '$' + data.total_monthly_usd.toLocaleString();
+    document.getElementById('costs-yearly').textContent = '≈ $' + data.total_yearly_usd.toLocaleString() + ' / an';
+
+    // Line items
+    const tbody = document.getElementById('costs-table-body');
+    tbody.innerHTML = '';
+    (data.line_items || []).forEach(item => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.innerHTML = `<td style="padding:6px 8px;">${item.component}</td>
+        <td style="padding:6px 8px; color:var(--accent2);">${item.tool}</td>
+        <td style="padding:6px 8px; text-align:right; font-weight:600;">$${item.monthly_usd.toLocaleString()}</td>
+        <td style="padding:6px 8px; color:var(--muted); font-size:0.8rem;">${item.notes || ''}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Savings tips
+    const tips = data.savings_tips || [];
+    const tipsSection = document.getElementById('costs-tips-section');
+    const tipsList = document.getElementById('costs-tips');
+    tipsList.innerHTML = '';
+    if (tips.length > 0) {
+      tipsSection.style.display = 'block';
+      tips.forEach(tip => {
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:7px 0; border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--warning);';
+        li.textContent = '💡 ' + tip;
+        tipsList.appendChild(li);
+      });
+    } else {
+      tipsSection.style.display = 'none';
+    }
+
+    // Multi-cloud comparison bar chart (pure CSS)
+    const comparison = data.comparison || {};
+    const compEl = document.getElementById('costs-comparison');
+    compEl.innerHTML = '';
+    const clouds = ['aws', 'gcp', 'azure'];
+    const cloudColors = {aws: '#f59e0b', gcp: '#22d3ee', azure: '#818cf8'};
+    const maxVal = Math.max(...Object.values(comparison), 1);
+    clouds.forEach(cloud => {
+      const val = comparison[cloud] || 0;
+      const pct = Math.max(4, Math.round((val / maxVal) * 100));
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px;';
+      row.innerHTML = `
+        <span style="width:48px; font-size:0.82rem; font-weight:600; color:var(--muted); text-transform:uppercase;">${cloud}</span>
+        <div style="flex:1; background:var(--border); border-radius:4px; height:22px; overflow:hidden;">
+          <div style="width:${pct}%; background:${cloudColors[cloud]}; height:100%; border-radius:4px; transition:width .4s;"></div>
+        </div>
+        <span style="width:80px; text-align:right; font-weight:700; font-size:0.9rem;">$${val.toLocaleString()}</span>`;
+      compEl.appendChild(row);
+    });
+  } catch(e) {
+    resultEl.innerHTML = `<div class="card" style="color:var(--danger);">Erreur: ${e.message}</div>`;
   }
 }
 
