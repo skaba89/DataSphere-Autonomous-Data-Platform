@@ -80,6 +80,46 @@ jobs:
           --cov-report=term-missing
           --cov-fail-under=60
 
+  integration:
+    name: Docker integration tests
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t datasphere:ci .
+
+      - name: Start API container
+        run: |
+          docker run -d --name datasphere-ci \
+            -p 18000:8000 \
+            -e LOG_FORMAT=json \
+            -e DATASPHERE_RATE_LIMIT_RPM=600 \
+            datasphere:ci
+
+      - name: Wait for healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:18000/readyz; then echo "API ready"; break; fi
+            echo "Waiting... ($i/30)"; sleep 3
+          done
+
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke_test.sh
+          DATASPHERE_BASE_URL=http://localhost:18000 bash scripts/smoke_test.sh http://localhost:18000
+
+      - name: Run integration test suite
+        run: |
+          pip install pytest
+          DATASPHERE_BASE_URL=http://localhost:18000 python -m pytest tests/test_docker_integration.py -v
+
+      - name: Stop container
+        if: always()
+        run: docker stop datasphere-ci && docker rm datasphere-ci
+
   build:
     name: Docker Build & Smoke Test
     runs-on: ubuntu-latest
