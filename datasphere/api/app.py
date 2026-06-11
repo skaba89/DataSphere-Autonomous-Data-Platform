@@ -1,10 +1,13 @@
 """API REST FastAPI — expose DataSphere en tant que service HTTP."""
 from __future__ import annotations
 import asyncio
+import io
+import json
 import os
 import tempfile
 import time
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -250,6 +253,55 @@ def _serialize_result(result: Any) -> dict:
     return out
 
 
+def _build_stack_report(result: dict) -> str:
+    """Generate a markdown summary report from a serialized job result."""
+    lines: list[str] = ["# DataSphere — Stack Report\n"]
+
+    sa = result.get("stack_advisor") or {}
+    stack = sa.get("validated_stack") or {}
+    if stack:
+        lines.append("## Architecture Summary\n")
+        lines.append("| Layer | Tool |")
+        lines.append("|-------|------|")
+        for layer, tool in stack.items():
+            lines.append(f"| {layer} | {tool} |")
+        lines.append("")
+
+    co = result.get("cost_optimization") or {}
+    if co.get("total_monthly_usd") is not None:
+        lines.append("## Cost Estimation\n")
+        lines.append(f"- Monthly: **${co['total_monthly_usd']:,.0f}**")
+        if co.get("total_yearly_usd") is not None:
+            lines.append(f"- Yearly:  **${co['total_yearly_usd']:,.0f}**")
+        optimizations = co.get("optimizations") or []
+        if optimizations:
+            lines.append("\n### Optimizations")
+            for opt in optimizations:
+                lines.append(f"- {opt}")
+        lines.append("")
+
+    sec = result.get("security_compliance") or {}
+    compliance_notes = sec.get("compliance_notes") or []
+    if compliance_notes:
+        lines.append("## Compliance Notes\n")
+        for note in compliance_notes:
+            lines.append(f"- {note}")
+        lines.append("")
+
+    lines.append("## Generated Artifact Keys\n")
+    for agent_name in ("stack_advisor", "cloud_architect", "infrastructure",
+                       "cost_optimization", "security_compliance", "deployment"):
+        agent = result.get(agent_name) or {}
+        keys = agent.get("artifact_keys") or []
+        if keys:
+            lines.append(f"### {agent_name}")
+            for k in keys:
+                lines.append(f"- {k}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
@@ -493,6 +545,55 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
         job_store.delete(job_id)
         return {"deleted": job_id}
+
+    @app.get("/jobs/{job_id}/download", tags=["generation"])
+    def download_job(job_id: str) -> Response:
+        """Télécharge les artefacts d'un job terminé sous forme de fichier ZIP."""
+        job = job_store.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        if job.get("status") != "completed":
+            raise HTTPException(status_code=404, detail=f"Job {job_id} n'est pas terminé")
+
+        result = job.get("result") or {}
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # manifest.json
+            stack_summary = {}
+            sa = result.get("stack_advisor")
+            if sa and isinstance(sa, dict):
+                stack_summary = sa.get("validated_stack") or {}
+            manifest = {
+                "job_id": job_id,
+                "created_at": job.get("created_at", ""),
+                "stack_summary": stack_summary,
+            }
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+
+            # stack_report.md
+            zf.writestr("stack_report.md", _build_stack_report(result))
+
+            # Walk result for dicts that have a "files" key
+            def _add_files(node: Any) -> None:
+                if isinstance(node, dict):
+                    if "files" in node and isinstance(node["files"], dict):
+                        for fname, content in node["files"].items():
+                            zf.writestr(fname, content if isinstance(content, str) else json.dumps(content, indent=2))
+                    for v in node.values():
+                        _add_files(v)
+                elif isinstance(node, list):
+                    for item in node:
+                        _add_files(item)
+
+            _add_files(result)
+
+        buf.seek(0)
+        return Response(
+            content=buf.read(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="datasphere-{job_id[:8]}.zip"'},
+        )
 
     @app.post("/jobs/purge", tags=["generation"])
     def purge_jobs(max_age_hours: int = 24) -> dict:

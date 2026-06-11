@@ -254,3 +254,62 @@ class TestAsyncGenerate:
         r = client.get("/jobs")
         assert r.status_code == 200
         assert isinstance(r.json(), list)
+
+
+class TestDownloadEndpoint:
+    def test_download_completed_job_returns_zip(self):
+        import io, zipfile, uuid
+        from datasphere.api.job_store import job_store
+
+        job_id = str(uuid.uuid4())
+        fake_result = {
+            "success": True,
+            "errors": [],
+            "request_summary": "test",
+            "artifacts_path": "",
+            "stack_advisor": {
+                "success": True,
+                "warnings": [],
+                "errors": [],
+                "artifact_keys": ["stack.yml"],
+                "validated_stack": {"warehouse": "snowflake", "orchestrator": "airflow"},
+            },
+            "cost_optimization": {
+                "success": True,
+                "warnings": [],
+                "errors": [],
+                "artifact_keys": [],
+                "total_monthly_usd": 1234,
+                "total_yearly_usd": 14808,
+                "optimizations": ["Use reserved instances"],
+            },
+        }
+        job_store.create(job_id, status="pending")
+        job_store.update(job_id, status="completed", result=fake_result)
+
+        r = client.get(f"/jobs/{job_id}/download")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "application/zip"
+        assert f"datasphere-{job_id[:8]}.zip" in r.headers.get("content-disposition", "")
+
+        buf = io.BytesIO(r.content)
+        with zipfile.ZipFile(buf) as zf:
+            names = zf.namelist()
+            assert "manifest.json" in names
+            assert "stack_report.md" in names
+            manifest = json.loads(zf.read("manifest.json"))
+            assert manifest["job_id"] == job_id
+            assert manifest["stack_summary"]["warehouse"] == "snowflake"
+
+    def test_download_nonexistent_job_returns_404(self):
+        r = client.get("/jobs/00000000-dead-beef-0000-000000000000/download")
+        assert r.status_code == 404
+
+    def test_download_pending_job_returns_404(self):
+        import uuid
+        from datasphere.api.job_store import job_store
+
+        job_id = str(uuid.uuid4())
+        job_store.create(job_id, status="pending")
+        r = client.get(f"/jobs/{job_id}/download")
+        assert r.status_code == 404

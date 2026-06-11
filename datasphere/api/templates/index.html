@@ -793,6 +793,7 @@ function selectMode(mode) {
 // Generate
 // ============================================================
 let _sseSource = null;
+let _lastJobId = null;
 
 async function runGenerate() {
   const btn = document.getElementById('generate-btn');
@@ -843,6 +844,7 @@ async function runGenerate() {
           prog.textContent = msg.message || '';
         } else if (msg.type === 'done') {
           _sseSource.close(); _sseSource = null;
+          _lastJobId = job_id;
           renderResult(msg.result);
           toast('Architecture générée avec succès !', 'success');
           btn.disabled = false; btn.textContent = '⚡ Générer';
@@ -882,6 +884,7 @@ async function _pollJobFallback(jobId, btn) {
     const res = await fetch(`/jobs/${jobId}`);
     const data = await res.json();
     if (data.status === 'completed' && data.result) {
+      _lastJobId = jobId;
       renderResult(data.result);
       toast('Architecture générée avec succès !', 'success');
     } else if (data.status === 'failed') {
@@ -990,12 +993,21 @@ function renderResult(data) {
         <div class="agent-title"><div class="dot"></div>Pipeline CI/CD</div>
         <ul style="padding-left:0;list-style:none;">${stages}</ul>
       </div>` : ''}
+
+      ${_lastJobId ? `<div style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+        <button class="btn btn-secondary" id="download-btn" onclick="downloadLastJob()">&#x2B07; Télécharger ZIP</button>
+      </div>` : ''}
     </div>`;
 }
 
 function resetForm() {
   document.getElementById('business_request').value = '';
   document.getElementById('generate-result').classList.remove('visible');
+}
+
+function downloadLastJob() {
+  if (!_lastJobId) { toast('Pas de job à télécharger', 'error'); return; }
+  window.location = `/jobs/${_lastJobId}/download`;
 }
 
 // ============================================================
