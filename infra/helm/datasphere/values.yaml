@@ -25,6 +25,7 @@ api:
     LOG_FORMAT: "json"
     LOG_LEVEL: "INFO"
     DATASPHERE_RATE_LIMIT_RPM: "60"
+    DATASPHERE_OTLP_ENDPOINT: ""
   # Set via --set api.apiKey=<value> or a secret
   apiKey: ""
   corsOrigins: ""

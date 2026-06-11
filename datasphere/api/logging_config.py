@@ -20,6 +20,18 @@ from typing import Any
 # Context variable — propagated across async/sync boundaries
 _request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
+
+def _get_trace_id() -> str:
+    try:
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        ctx = span.get_span_context()
+        if ctx and ctx.is_valid:
+            return format(ctx.trace_id, '032x')
+    except Exception:
+        pass
+    return ""
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_FORMAT = os.environ.get("LOG_FORMAT", "json")  # "json" | "text"
 
@@ -32,6 +44,7 @@ class _JsonFormatter(logging.Formatter):
             "logger":    record.name,
             "message":   record.getMessage(),
             "request_id": _request_id_var.get(""),
+            "trace_id": _get_trace_id(),
         }
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)

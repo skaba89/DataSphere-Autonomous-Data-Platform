@@ -40,6 +40,8 @@ spec:
               value: {{ .Values.api.env.LOG_LEVEL | quote }}
             - name: DATASPHERE_RATE_LIMIT_RPM
               value: {{ .Values.api.env.DATASPHERE_RATE_LIMIT_RPM | quote }}
+            - name: DATASPHERE_OTLP_ENDPOINT
+              value: {{ .Values.api.env.DATASPHERE_OTLP_ENDPOINT | quote }}
             - name: DATASPHERE_JOB_DB
               value: {{ .Values.api.jobDbPath | quote }}
             {{- if .Values.api.corsOrigins }}

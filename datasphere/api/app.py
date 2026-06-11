@@ -30,6 +30,8 @@ from datasphere.api.job_store import job_store
 from datasphere.api.auth import require_auth, auth_status
 from datasphere.api.sse import make_sse_response
 from datasphere.api.logging_config import setup_logging, get_logger, set_request_id
+from datasphere.api.tracing import setup_tracing, start_span
+from datasphere.api.tenancy import get_tenant_id, set_tenant_id, tenant_job_id, validate_tenant_id
 
 setup_logging()
 _log = get_logger(__name__)
@@ -186,50 +188,51 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
     set_request_id(job_id)
     _log.info("generation_started", extra={"job_id": job_id, "mode": req.mode})
     job_store.update(job_id, status="running")
-    try:
-        with tempfile.TemporaryDirectory() as tmp:
-            if req.mode == "explicit":
-                stack = ExplicitStack(
-                    business_request=req.business_request or "DataSphere pipeline",
-                    cloud_provider=req.cloud_provider or "aws",
-                    data_warehouse=req.data_warehouse or "snowflake",
-                    orchestrator=req.orchestrator or "airflow",
-                    ingestion=req.ingestion or "airbyte",
-                    transformation=req.transformation or "dbt",
-                    bi_tool=req.bi_tool or "superset",
-                    deployment=req.deployment or "kubernetes",
-                    data_lake=req.data_lake,
-                    catalog=req.catalog,
-                    quality=req.quality,
-                    security=req.security,
-                    budget=req.budget or "medium",
-                    data_volume=req.data_volume or "medium",
-                    processing_mode=req.processing_mode or "batch",
-                    region=req.region,
-                )
-                result = run_explicit(stack, output_dir=tmp, verbose=False)
-            else:
-                ctx = RecommendationContext(
-                    business_request=req.business_request or "DataSphere pipeline",
-                    budget=req.budget or "medium",
-                    data_volume=req.data_volume or "medium",
-                    security_level=req.security_level or "rbac",
-                    team_size=req.team_size or "medium",
-                    processing_mode=req.processing_mode or "batch",
-                    cloud_preference=req.cloud_preference or "none",
-                    deployment_preference=req.deployment_preference,
-                    must_be_open_source=req.must_be_open_source,
-                    existing_tools=req.existing_tools,
-                    compliance_requirements=req.compliance_requirements,
-                )
-                result = run_recommended(ctx, output_dir=tmp, verbose=False)
+    with start_span("generation.run", {"job_id": job_id, "mode": req.mode}):
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                if req.mode == "explicit":
+                    stack = ExplicitStack(
+                        business_request=req.business_request or "DataSphere pipeline",
+                        cloud_provider=req.cloud_provider or "aws",
+                        data_warehouse=req.data_warehouse or "snowflake",
+                        orchestrator=req.orchestrator or "airflow",
+                        ingestion=req.ingestion or "airbyte",
+                        transformation=req.transformation or "dbt",
+                        bi_tool=req.bi_tool or "superset",
+                        deployment=req.deployment or "kubernetes",
+                        data_lake=req.data_lake,
+                        catalog=req.catalog,
+                        quality=req.quality,
+                        security=req.security,
+                        budget=req.budget or "medium",
+                        data_volume=req.data_volume or "medium",
+                        processing_mode=req.processing_mode or "batch",
+                        region=req.region,
+                    )
+                    result = run_explicit(stack, output_dir=tmp, verbose=False)
+                else:
+                    ctx = RecommendationContext(
+                        business_request=req.business_request or "DataSphere pipeline",
+                        budget=req.budget or "medium",
+                        data_volume=req.data_volume or "medium",
+                        security_level=req.security_level or "rbac",
+                        team_size=req.team_size or "medium",
+                        processing_mode=req.processing_mode or "batch",
+                        cloud_preference=req.cloud_preference or "none",
+                        deployment_preference=req.deployment_preference,
+                        must_be_open_source=req.must_be_open_source,
+                        existing_tools=req.existing_tools,
+                        compliance_requirements=req.compliance_requirements,
+                    )
+                    result = run_recommended(ctx, output_dir=tmp, verbose=False)
 
-            serialized = _serialize_result(result)
-            job_store.update(job_id, status="completed", result=serialized)
-            _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
-    except Exception as exc:
-        _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
-        job_store.update(job_id, status="failed", error=str(exc))
+                serialized = _serialize_result(result)
+                job_store.update(job_id, status="completed", result=serialized)
+                _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
+        except Exception as exc:
+            _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
+            job_store.update(job_id, status="failed", error=str(exc))
 
 
 def _serialize_result(result: Any) -> dict:
@@ -323,6 +326,7 @@ def _build_stack_report(result: dict) -> str:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    setup_tracing("datasphere-api")
     _log.info("datasphere_api_starting", extra={"version": _VERSION})
     # Startup: verify job store is reachable
     try:
@@ -358,7 +362,7 @@ def create_app() -> FastAPI:
         allow_origins=_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID"],
     )
 
     # ------------------------------------------------------------------
@@ -369,11 +373,22 @@ def create_app() -> FastAPI:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         set_request_id(req_id)
 
-        # Rate limiting on mutation endpoints
+        # Tenant extraction and validation
+        tenant_id = request.headers.get("X-Tenant-ID", "default")
+        if not validate_tenant_id(tenant_id):
+            return Response(
+                content='{"detail":"Invalid X-Tenant-ID"}',
+                status_code=400,
+                headers={"Content-Type": "application/json"},
+            )
+        set_tenant_id(tenant_id)
+
+        # Rate limiting on mutation endpoints — per tenant:ip bucket
         if request.method in ("POST", "PUT", "DELETE"):
             ip = request.client.host if request.client else "unknown"
-            if not _rate_limiter.is_allowed(ip):
-                _log.warning("rate_limit_exceeded", extra={"ip": ip, "path": request.url.path})
+            rate_key = f"{tenant_id}:{ip}"
+            if not _rate_limiter.is_allowed(rate_key):
+                _log.warning("rate_limit_exceeded", extra={"ip": ip, "tenant_id": tenant_id, "path": request.url.path})
                 return Response(
                     content='{"detail":"Too many requests — rate limit exceeded"}',
                     status_code=429,
@@ -381,10 +396,13 @@ def create_app() -> FastAPI:
                 )
 
         start = time.monotonic()
-        response = await call_next(request)
-        duration_ms = round((time.monotonic() - start) * 1000)
+        with start_span("http.request", {"http.method": request.method, "http.path": request.url.path}) as span:
+            response = await call_next(request)
+            duration_ms = round((time.monotonic() - start) * 1000)
+            span.set_attribute("http.status_code", response.status_code)
         response.headers["X-Request-ID"] = req_id
         response.headers["X-Response-Time"] = f"{duration_ms}ms"
+        response.headers["X-Tenant-ID"] = tenant_id
         _log.info(
             "http_request",
             extra={
@@ -470,6 +488,7 @@ def create_app() -> FastAPI:
                 "POST /prefect/generate",
                 "POST /terraform/generate",
                 "GET  /stacks/supported",
+                "Multi-tenant: set X-Tenant-ID header to isolate jobs per tenant",
             ],
         }
 
@@ -485,9 +504,11 @@ def create_app() -> FastAPI:
         Connect with `EventSource('/generate/stream?job_id=<id>')`.
         Events: `status`, `log`, `done`, `error`.
         """
-        if not job_store.get(job_id):
+        scoped_id = tenant_job_id(job_id)
+        actual_id = scoped_id if job_store.get(scoped_id) else job_id
+        if not job_store.get(actual_id):
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-        return make_sse_response(job_id)
+        return make_sse_response(actual_id)
 
     @app.post("/generate", response_model=JobResponse, tags=["generation"])
     async def generate(
@@ -504,9 +525,10 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
         job_id = str(uuid.uuid4())
-        job_store.create(job_id, status="pending")
-        _log.info("job_enqueued", extra={"job_id": job_id, "mode": req.mode})
-        background_tasks.add_task(_run_generation, job_id, req)
+        scoped_id = tenant_job_id(job_id)
+        job_store.create(scoped_id, status="pending")
+        _log.info("job_enqueued", extra={"job_id": job_id, "scoped_id": scoped_id, "mode": req.mode, "tenant_id": get_tenant_id()})
+        background_tasks.add_task(_run_generation, scoped_id, req)
         return JobResponse(
             job_id=job_id,
             status="pending",
@@ -538,11 +560,12 @@ def create_app() -> FastAPI:
     @app.get("/jobs/{job_id}", response_model=JobStatusResponse, tags=["generation"])
     def get_job(job_id: str) -> JobStatusResponse:
         """Récupère le statut et le résultat d'un job de génération."""
-        job = job_store.get(job_id)
+        scoped_id = tenant_job_id(job_id)
+        job = job_store.get(scoped_id) or job_store.get(job_id)  # fallback for default tenant
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
         return JobStatusResponse(
-            job_id=job["job_id"],
+            job_id=job_id,
             status=job["status"],
             result=job.get("result"),
             error=job.get("error", ""),
@@ -550,15 +573,21 @@ def create_app() -> FastAPI:
 
     @app.get("/jobs", tags=["generation"])
     def list_jobs() -> list[dict]:
-        """Liste tous les jobs (persistés dans SQLite)."""
-        return job_store.list_all()
+        """Liste tous les jobs filtrés par tenant courant."""
+        all_jobs = job_store.list_all()
+        tenant = get_tenant_id()
+        if tenant != "default":
+            prefix = f"{tenant}:"
+            return [j for j in all_jobs if j["job_id"].startswith(prefix)]
+        return [j for j in all_jobs if ":" not in j["job_id"]]
 
     @app.delete("/jobs/{job_id}", tags=["generation"])
     def delete_job(job_id: str) -> dict:
         """Supprime un job de l'historique."""
-        if not job_store.get(job_id):
+        scoped_id = tenant_job_id(job_id)
+        if not (job_store.get(scoped_id) or job_store.get(job_id)):
             raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
-        job_store.delete(job_id)
+        job_store.delete(scoped_id)
         return {"deleted": job_id}
 
     @app.get("/jobs/{job_id}/download", tags=["generation"])
