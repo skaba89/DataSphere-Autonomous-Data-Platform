@@ -21,6 +21,14 @@ from typing import Any
 _request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
 
+def _get_tenant_id_safe() -> str:
+    try:
+        from datasphere.api.tenancy import get_tenant_id
+        return get_tenant_id()
+    except Exception:
+        return ""
+
+
 def _get_trace_id() -> str:
     try:
         from opentelemetry import trace
@@ -44,6 +52,7 @@ class _JsonFormatter(logging.Formatter):
             "logger":    record.name,
             "message":   record.getMessage(),
             "request_id": _request_id_var.get(""),
+            "tenant_id":  _get_tenant_id_safe(),
             "trace_id": _get_trace_id(),
         }
         if record.exc_info:

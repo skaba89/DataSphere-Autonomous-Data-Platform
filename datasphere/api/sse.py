@@ -18,6 +18,7 @@ from collections.abc import AsyncGenerator
 from fastapi.responses import StreamingResponse
 
 from datasphere.api.job_store import job_store
+from datasphere.api.tenancy import get_tenant_id
 
 _POLL_INTERVAL = 0.4   # seconds between store polls
 _TIMEOUT       = 300   # seconds before giving up
@@ -59,11 +60,12 @@ async def stream_job_progress(job_id: str) -> AsyncGenerator[str, None]:
 
         if status != last_status:
             yield _event({
-                "type":     "status",
-                "status":   status,
-                "step":     step,
-                "label":    label,
-                "progress": progress,
+                "type":      "status",
+                "status":    status,
+                "step":      step,
+                "label":     label,
+                "progress":  progress,
+                "tenant_id": get_tenant_id(),
             })
             last_status = status
 
