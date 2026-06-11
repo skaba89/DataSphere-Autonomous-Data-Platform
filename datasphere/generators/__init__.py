@@ -4,5 +4,6 @@ from datasphere.generators.dagster_job import DagsterJobGenerator
 from datasphere.generators.prefect_flow import PrefectFlowGenerator
 from datasphere.generators.terraform import TerraformGenerator
 from datasphere.generators.lineage import LineageGenerator
+from datasphere.generators.stack_diff import StackDiffGenerator
 
-__all__ = ["DbtProjectGenerator", "AirflowDagGenerator", "DagsterJobGenerator", "PrefectFlowGenerator", "TerraformGenerator", "LineageGenerator"]
+__all__ = ["DbtProjectGenerator", "AirflowDagGenerator", "DagsterJobGenerator", "PrefectFlowGenerator", "TerraformGenerator", "LineageGenerator", "StackDiffGenerator"]

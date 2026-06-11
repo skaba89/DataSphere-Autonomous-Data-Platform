@@ -168,6 +168,16 @@ class LineageRequest(BaseModel):
     business_request: str = ""
 
 
+class CostEstimateRequest(BaseModel):
+    stack: dict  # validated_stack dict
+    budget: str = "medium"
+
+
+class StackDiffRequest(BaseModel):
+    from_stack: dict
+    to_stack: dict
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -835,6 +845,65 @@ def create_app() -> FastAPI:
             "nodes": output.nodes,
             "edge_count": len(output.edges),
             "embed_url": embed_url,
+        }
+
+    # ------------------------------------------------------------------
+    # Cost estimation
+    # ------------------------------------------------------------------
+
+    @app.post("/costs/estimate", tags=["analysis"])
+    def estimate_cost(req: CostEstimateRequest) -> dict:
+        """Estimate detailed cost breakdown for a stack with multi-cloud comparison."""
+        from datasphere.agents.cost_tables import CostCalculator
+        calculator = CostCalculator()
+        breakdown = calculator.calculate(req.stack, req.budget)
+        return {
+            "total_monthly_usd": breakdown.total_monthly_usd,
+            "total_yearly_usd":  breakdown.total_yearly_usd,
+            "budget_tier":       breakdown.budget_tier,
+            "line_items": [
+                {
+                    "component":   item.component,
+                    "tool":        item.tool,
+                    "monthly_usd": item.monthly_usd,
+                    "yearly_usd":  item.yearly_usd,
+                    "notes":       item.notes,
+                }
+                for item in breakdown.line_items
+            ],
+            "savings_tips": breakdown.savings_tips,
+            "comparison":   breakdown.comparison,
+        }
+
+    # ------------------------------------------------------------------
+    # Stack diff & migration plan
+    # ------------------------------------------------------------------
+
+    @app.post("/stacks/diff", tags=["analysis"])
+    def stack_diff(req: StackDiffRequest) -> dict:
+        """Compare two stacks and generate a migration plan."""
+        from datasphere.generators.stack_diff import StackDiffGenerator
+        gen = StackDiffGenerator()
+        plan = gen.diff(req.from_stack, req.to_stack)
+        return {
+            "summary": plan.summary,
+            "total_estimated_days": plan.total_estimated_days,
+            "overall_risk": plan.overall_risk,
+            "migration_order": plan.migration_order,
+            "rollback_strategy": plan.rollback_strategy,
+            "changes": [
+                {
+                    "component": c.component,
+                    "from_tool": c.from_tool,
+                    "to_tool": c.to_tool,
+                    "change_type": c.change_type,
+                    "effort": c.effort,
+                    "risk": c.risk,
+                    "estimated_days": c.estimated_days,
+                    "migration_steps": c.migration_steps,
+                }
+                for c in plan.changes
+            ],
         }
 
     # ------------------------------------------------------------------

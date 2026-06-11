@@ -525,6 +525,8 @@
       <button class="tab" onclick="switchSubTab('prefect')">Prefect</button>
       <button class="tab" onclick="switchSubTab('terraform')">🏗 Terraform</button>
       <button class="tab" onclick="switchSubTab('lineage')">🔗 Lineage</button>
+      <button class="tab" onclick="switchSubTab('migration')">🔄 Migration</button>
+      <button class="tab" onclick="switchSubTab('costs')">💰 Coûts</button>
     </div>
 
     <!-- dbt -->
@@ -755,6 +757,102 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Migration -->
+    <div id="subtab-migration" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <!-- Stack actuelle -->
+        <div class="card">
+          <h3>Stack actuelle</h3>
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="mig-from-warehouse">
+              <option value="">-- aucun --</option>
+              <option value="redshift">Redshift</option>
+              <option value="snowflake">Snowflake</option>
+              <option value="bigquery">BigQuery</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="duckdb">DuckDB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Orchestrateur</label>
+            <select id="mig-from-orchestrator">
+              <option value="">-- aucun --</option>
+              <option value="airflow">Airflow</option>
+              <option value="dagster">Dagster</option>
+              <option value="prefect">Prefect</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="mig-from-ingestion">
+              <option value="">-- aucun --</option>
+              <option value="fivetran">Fivetran</option>
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BI Tool</label>
+            <select id="mig-from-bi_tool">
+              <option value="">-- aucun --</option>
+              <option value="tableau">Tableau</option>
+              <option value="looker">Looker</option>
+              <option value="metabase">Metabase</option>
+              <option value="superset">Superset</option>
+            </select>
+          </div>
+        </div>
+        <!-- Stack cible -->
+        <div class="card">
+          <h3>Stack cible</h3>
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="mig-to-warehouse">
+              <option value="">-- aucun --</option>
+              <option value="redshift">Redshift</option>
+              <option value="snowflake">Snowflake</option>
+              <option value="bigquery">BigQuery</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="duckdb">DuckDB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Orchestrateur</label>
+            <select id="mig-to-orchestrator">
+              <option value="">-- aucun --</option>
+              <option value="airflow">Airflow</option>
+              <option value="dagster">Dagster</option>
+              <option value="prefect">Prefect</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="mig-to-ingestion">
+              <option value="">-- aucun --</option>
+              <option value="fivetran">Fivetran</option>
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BI Tool</label>
+            <select id="mig-to-bi_tool">
+              <option value="">-- aucun --</option>
+              <option value="tableau">Tableau</option>
+              <option value="looker">Looker</option>
+              <option value="metabase">Metabase</option>
+              <option value="superset">Superset</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="analyzeMigration()">🔄 Analyser la migration</button>
+      </div>
+      <div id="migration-result" style="display:none; margin-top:24px;"></div>
     </div>
   </div>
 
@@ -1438,6 +1536,92 @@ async function generateLineage() {
 function copyLineage() {
   const code = document.getElementById('lineage-code').textContent;
   navigator.clipboard.writeText(code).then(() => toast('Copié !', 'success'));
+}
+
+// ============================================================
+// Migration analyzer
+// ============================================================
+async function analyzeMigration() {
+  const components = ['warehouse', 'orchestrator', 'ingestion', 'bi_tool'];
+  const fromStack = {}, toStack = {};
+  components.forEach(c => {
+    const fv = document.getElementById('mig-from-' + c).value;
+    const tv = document.getElementById('mig-to-' + c).value;
+    if (fv) fromStack['data_' + c === 'data_warehouse' ? 'data_warehouse' : c] = fv;
+    if (tv) toStack['data_' + c === 'data_warehouse' ? 'data_warehouse' : c] = tv;
+  });
+  // Fix key mapping: 'warehouse' -> 'data_warehouse', others keep as-is
+  const fromFinal = {}, toFinal = {};
+  if (fromStack['data_warehouse']) fromFinal['data_warehouse'] = fromStack['data_warehouse'];
+  if (fromStack['orchestrator']) fromFinal['orchestrator'] = fromStack['orchestrator'];
+  if (fromStack['ingestion']) fromFinal['ingestion'] = fromStack['ingestion'];
+  if (fromStack['bi_tool']) fromFinal['bi_tool'] = fromStack['bi_tool'];
+  if (toStack['data_warehouse']) toFinal['data_warehouse'] = toStack['data_warehouse'];
+  if (toStack['orchestrator']) toFinal['orchestrator'] = toStack['orchestrator'];
+  if (toStack['ingestion']) toFinal['ingestion'] = toStack['ingestion'];
+  if (toStack['bi_tool']) toFinal['bi_tool'] = toStack['bi_tool'];
+
+  // Re-read raw values directly for clarity
+  const rawFrom = {}, rawTo = {};
+  components.forEach(c => {
+    const key = c === 'warehouse' ? 'data_warehouse' : c;
+    const fv = document.getElementById('mig-from-' + c).value;
+    const tv = document.getElementById('mig-to-' + c).value;
+    if (fv) rawFrom[key] = fv;
+    if (tv) rawTo[key] = tv;
+  });
+
+  const resultEl = document.getElementById('migration-result');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch('/stacks/diff', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({from_stack: rawFrom, to_stack: rawTo})
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const riskColor = data.overall_risk === 'high' ? 'var(--error,#ef4444)' : data.overall_risk === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+    let html = `<div class="card">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+        <span style="background:${riskColor};color:#fff;padding:4px 12px;border-radius:20px;font-weight:700;font-size:0.85rem;">Risque: ${data.overall_risk.toUpperCase()}</span>
+        <span style="background:var(--surface2,#1e293b);padding:4px 12px;border-radius:20px;font-size:0.85rem;">~${data.total_estimated_days} jours</span>
+      </div>
+      <p style="color:var(--muted);margin-bottom:20px;">${data.summary}</p>`;
+
+    if (data.changes.length === 0) {
+      html += '<p style="color:var(--success);">Aucun changement détecté — stacks identiques.</p>';
+    } else {
+      html += '<div class="section-title" style="margin-bottom:12px;">Plan de migration (ordre recommandé)</div>';
+      const byComp = Object.fromEntries(data.changes.map(c => [c.component, c]));
+      data.migration_order.forEach((comp, i) => {
+        const c = byComp[comp]; if (!c) return;
+        const effortColor = c.effort === 'high' ? 'var(--error,#ef4444)' : c.effort === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+        const rColor = c.risk === 'high' ? 'var(--error,#ef4444)' : c.risk === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+        const stepsId = 'mig-steps-' + i;
+        html += `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;" onclick="document.getElementById('${stepsId}').style.display=document.getElementById('${stepsId}').style.display==='none'?'block':'none'">
+            <span style="font-weight:600;">${i+1}. ${comp}</span>
+            <span style="color:var(--muted);font-size:0.85rem;">${c.from_tool || '—'} → ${c.to_tool || '—'}</span>
+            <span style="background:${effortColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;">effort: ${c.effort}</span>
+            <span style="background:${rColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;">risque: ${c.risk}</span>
+            <span style="color:var(--muted);font-size:0.8rem;margin-left:auto;">${c.estimated_days}j ▼</span>
+          </div>
+          <ol id="${stepsId}" style="display:none;margin:12px 0 0 20px;color:var(--muted);font-size:0.85rem;">
+            ${c.migration_steps.map(s => `<li style="margin-bottom:4px;">${s}</li>`).join('')}
+          </ol>
+        </div>`;
+      });
+    }
+    html += `<div style="margin-top:20px;padding:12px;background:var(--surface2,#1e293b);border-radius:8px;">
+      <div style="font-weight:600;margin-bottom:6px;">Stratégie de rollback</div>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0;">${data.rollback_strategy}</p>
+    </div></div>`;
+    resultEl.innerHTML = html;
+  } catch(e) {
+    resultEl.innerHTML = `<div class="card" style="color:var(--error,#ef4444);">Erreur: ${e.message}</div>`;
+  }
 }
 
 // ============================================================
