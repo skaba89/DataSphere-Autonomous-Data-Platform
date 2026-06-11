@@ -1,33 +1,84 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "datasphere.fullname" . }}
+  name: {{ include "datasphere.fullname" . }}-api
   labels:
     {{- include "datasphere.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
 spec:
-  replicas: {{ .Values.platform.replicaCount }}
+  replicas: {{ .Values.api.replicaCount }}
   selector:
     matchLabels:
       {{- include "datasphere.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
   template:
     metadata:
       labels:
         {{- include "datasphere.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
     spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.global.imageRegistry }}/datasphere/api:{{ .Chart.AppVersion }}"
+        - name: api
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8000
               protocol: TCP
-          envFrom:
-            - configMapRef:
-                name: {{ include "datasphere.fullname" . }}-config
+          env:
+            - name: LOG_FORMAT
+              value: {{ .Values.api.env.LOG_FORMAT | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.api.env.LOG_LEVEL | quote }}
+            - name: DATASPHERE_RATE_LIMIT_RPM
+              value: {{ .Values.api.env.DATASPHERE_RATE_LIMIT_RPM | quote }}
+            - name: DATASPHERE_JOB_DB
+              value: {{ .Values.api.jobDbPath | quote }}
+            {{- if .Values.api.corsOrigins }}
+            - name: DATASPHERE_CORS_ORIGINS
+              value: {{ .Values.api.corsOrigins | quote }}
+            {{- end }}
+            {{- if .Values.api.apiKey }}
+            - name: DATASPHERE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "datasphere.fullname" . }}-api-secret
+                  key: api-key
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          {{- if .Values.api.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "datasphere.fullname" . }}-api-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

@@ -1,13 +1,65 @@
 global:
-  imageRegistry: ""
+  imageRegistry: "ghcr.io/skaba89"
   storageClass: ""
   imagePullSecrets: []
 
+# ---------------------------------------------------------------------------
+# DataSphere API
+# ---------------------------------------------------------------------------
+api:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: datasphere/api
+    pullPolicy: IfNotPresent
+    # tag defaults to Chart.appVersion
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  env:
+    LOG_FORMAT: "json"
+    LOG_LEVEL: "INFO"
+    DATASPHERE_RATE_LIMIT_RPM: "60"
+  # Set via --set api.apiKey=<value> or a secret
+  apiKey: ""
+  corsOrigins: ""
+  # Path for SQLite job store (if not using Redis)
+  jobDbPath: "/data/jobs.db"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# ---------------------------------------------------------------------------
+# Platform metadata
+# ---------------------------------------------------------------------------
 platform:
   name: datasphere
   environment: production
   replicaCount: 1
 
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: datasphere.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# ---------------------------------------------------------------------------
+# Optional data services
+# ---------------------------------------------------------------------------
 postgresql:
   enabled: true
   auth:
@@ -68,12 +120,3 @@ grafana:
   persistence:
     enabled: true
     size: 5Gi
-
-ingress:
-  enabled: false
-  className: nginx
-  hosts:
-    - host: datasphere.example.com
-      paths:
-        - path: /
-          pathType: Prefix

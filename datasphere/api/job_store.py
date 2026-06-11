@@ -154,15 +154,39 @@ class SQLiteJobStore:
             return cur.rowcount
 
 
-def _build_store() -> SQLiteJobStore | _InMemoryStore:
+def _build_store():
+    """
+    Build the appropriate job store based on environment variables.
+
+    Priority:
+    1. DATASPHERE_REDIS_URL → RedisJobStore (multi-worker safe)
+    2. DATASPHERE_JOB_DB   → SQLiteJobStore (single-worker, persisted)
+    3. fallback             → _InMemoryStore (testing / no deps)
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    redis_url = os.environ.get("DATASPHERE_REDIS_URL", "")
+    if redis_url:
+        try:
+            from datasphere.api.job_store_redis import RedisJobStore
+            store = RedisJobStore(redis_url)
+            _log.info("job_store_backend=redis url=%s", redis_url)
+            return store
+        except Exception as exc:
+            _log.warning("redis_job_store_failed fallback=sqlite error=%s", exc)
+
     db_path = os.environ.get(
         "DATASPHERE_JOB_DB",
         str(Path.home() / ".datasphere" / "jobs.db"),
     )
     try:
-        return SQLiteJobStore(db_path)
-    except Exception:
+        store = SQLiteJobStore(db_path)
+        _log.info("job_store_backend=sqlite path=%s", db_path)
+        return store
+    except Exception as exc:
+        _log.warning("sqlite_job_store_failed fallback=memory error=%s", exc)
         return _InMemoryStore()
 
 
-job_store: SQLiteJobStore | _InMemoryStore = _build_store()
+job_store = _build_store()
