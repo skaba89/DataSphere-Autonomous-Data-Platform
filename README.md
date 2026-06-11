@@ -1,4 +1,9 @@
-# DataSphere -- Autonomous Data Platform
+# DataSphere Autonomous Data Platform
+
+![Tests](https://img.shields.io/badge/tests-435%20passed-22c55e)
+![Coverage](https://img.shields.io/badge/coverage-70%25-22c55e)
+![Python](https://img.shields.io/badge/python-3.11%2B-6366f1)
+![Version](https://img.shields.io/badge/version-1.2.0-22d3ee)
 
 > Stack-agnostic. Cloud-agnostic. You choose the tools.
 
@@ -28,7 +33,21 @@ Security:       Vault | Keycloak | Authentik | RBAC | ...
 ## Quick Start
 
 ```bash
-# Install
+# Docker
+docker run -p 8000:8000 ghcr.io/skaba89/datasphere-autonomous-data-platform:latest
+
+# Python SDK
+pip install datasphere-platform
+```
+
+```python
+from datasphere.client import DataSphereClient
+client = DataSphereClient("http://localhost:8000")
+result = client.generate("Pipeline analytics ventes", cloud_provider="aws", data_warehouse="snowflake")
+```
+
+```bash
+# Install CLI
 pip install datasphere
 
 # Configure interactively
@@ -43,6 +62,30 @@ docker compose -f infra/docker/docker-compose.base.yml up -d
 # Check status
 datasphere status stack.yaml
 ```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/healthz` | Liveness probe |
+| GET | `/readyz` | Readiness probe (checks job store) |
+| GET | `/` | List all endpoints |
+| GET | `/stacks/supported` | List supported tool categories |
+| GET | `/stacks/adapters` | List all registered adapters |
+| POST | `/generate` | Start async generation job |
+| POST | `/generate/sync` | Synchronous generation (blocking) |
+| GET | `/generate/stream` | SSE stream for async job progress |
+| POST | `/proposals` | Get architecture proposals |
+| GET | `/jobs` | List all jobs |
+| GET | `/jobs/{job_id}` | Get job status and result |
+| DELETE | `/jobs/{job_id}` | Delete a job |
+| GET | `/jobs/{job_id}/download` | Download job artifacts as ZIP |
+| POST | `/jobs/purge` | Purge old jobs |
+| POST | `/dbt/generate` | Generate dbt project scaffold |
+| POST | `/dags/airflow/generate` | Generate Airflow DAGs |
+| POST | `/dagster/generate` | Generate Dagster project |
+| POST | `/prefect/generate` | Generate Prefect flows |
+| POST | `/terraform/generate` | Generate Terraform IaC |
 
 ## Example Configurations
 
