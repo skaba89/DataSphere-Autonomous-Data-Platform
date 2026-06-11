@@ -1,0 +1,48 @@
+version: "3.9"
+
+# DataSphere API service — production-ready Docker Compose
+# Usage: docker-compose -f docker-compose.api.yml up -d
+
+services:
+  datasphere-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: datasphere/api:latest
+    container_name: datasphere-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      # Authentication — set a strong value in .env
+      DATASPHERE_API_KEY: "${DATASPHERE_API_KEY:-}"
+      # Job persistence
+      DATASPHERE_JOB_DB: /data/jobs.db
+      # CORS — comma-separated list of allowed origins
+      DATASPHERE_CORS_ORIGINS: "${DATASPHERE_CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}"
+      # Rate limiting (requests per minute per IP)
+      DATASPHERE_RATE_LIMIT_RPM: "${DATASPHERE_RATE_LIMIT_RPM:-60}"
+      # Logging
+      LOG_FORMAT: "${LOG_FORMAT:-json}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    volumes:
+      - datasphere_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          memory: 256M
+
+volumes:
+  datasphere_data:
+    driver: local

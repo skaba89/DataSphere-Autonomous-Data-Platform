@@ -303,6 +303,9 @@ def _write_artifacts(
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 filepath.write_text(content, encoding="utf-8")
 
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+
     # Generate dbt project scaffold
     try:
         dbt_files = DbtProjectGenerator().generate(
@@ -312,8 +315,8 @@ def _write_artifacts(
             filepath = base / "dbt" / rel_path
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(content, encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.warning("dbt_scaffold_failed", extra={"error": str(exc)})
 
     # Generate Airflow DAGs if orchestrator is Airflow
     if proposal.constraints.orchestrator.lower() in ("airflow", "apache airflow"):
@@ -325,8 +328,8 @@ def _write_artifacts(
                 filepath = base / "dags" / rel_path
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 filepath.write_text(content, encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("airflow_dag_failed", extra={"error": str(exc)})
 
     (base / "README.md").write_text(_build_index(result, proposal), encoding="utf-8")
     return str(base)

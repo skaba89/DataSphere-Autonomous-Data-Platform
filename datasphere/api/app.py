@@ -1,16 +1,18 @@
 """API REST FastAPI — expose DataSphere en tant que service HTTP."""
 from __future__ import annotations
+import asyncio
+import os
 import tempfile
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
 from datasphere.models.request import ArchitectureConstraints, BusinessRequest
@@ -24,6 +26,53 @@ from datasphere.generators.prefect_flow import PrefectFlowGenerator
 from datasphere.api.job_store import job_store
 from datasphere.api.auth import require_auth, auth_status
 from datasphere.api.sse import make_sse_response
+from datasphere.api.logging_config import setup_logging, get_logger, set_request_id
+
+setup_logging()
+_log = get_logger(__name__)
+
+_TEMPLATE_DIR = Path(__file__).parent / "templates"
+_VERSION = "1.2.0"
+
+# ---------------------------------------------------------------------------
+# CORS — configurable via env var (comma-separated origins or "*")
+# ---------------------------------------------------------------------------
+_CORS_ORIGINS_ENV = os.environ.get("DATASPHERE_CORS_ORIGINS", "")
+_CORS_ORIGINS: list[str] = (
+    [o.strip() for o in _CORS_ORIGINS_ENV.split(",") if o.strip()]
+    if _CORS_ORIGINS_ENV
+    else ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"]
+)
+
+# ---------------------------------------------------------------------------
+# Simple in-memory rate limiter (per IP, configurable via env)
+# ---------------------------------------------------------------------------
+_RATE_LIMIT_RPM = int(os.environ.get("DATASPHERE_RATE_LIMIT_RPM", "60"))
+
+import collections
+import threading
+
+class _RateLimiter:
+    """Token-bucket per IP, thread-safe."""
+    def __init__(self, rpm: int):
+        self._rpm = rpm
+        self._windows: dict[str, list[float]] = collections.defaultdict(list)
+        self._lock = threading.Lock()
+
+    def is_allowed(self, ip: str) -> bool:
+        if self._rpm <= 0:
+            return True
+        now = time.monotonic()
+        window = 60.0
+        with self._lock:
+            timestamps = self._windows[ip]
+            self._windows[ip] = [t for t in timestamps if now - t < window]
+            if len(self._windows[ip]) >= self._rpm:
+                return False
+            self._windows[ip].append(now)
+            return True
+
+_rate_limiter = _RateLimiter(_RATE_LIMIT_RPM)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -33,9 +82,9 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 # ---------------------------------------------------------------------------
 
 class GenerateRequest(BaseModel):
-    mode: str = Field("explicit", description="'explicit' ou 'recommended'")
+    mode: Literal["explicit", "recommended"] = Field("explicit", description="Mode de génération")
     # Mode 1 — explicit
-    business_request: Optional[str] = None
+    business_request: Optional[str] = Field(None, max_length=2000)
     cloud_provider: Optional[str] = None
     data_warehouse: Optional[str] = None
     orchestrator: Optional[str] = None
@@ -84,7 +133,7 @@ class ProposalsRequest(BaseModel):
 
 
 class DbtGenerateRequest(BaseModel):
-    business_request: str
+    business_request: str = Field(..., min_length=3, max_length=2000)
     cloud_provider: str = "aws"
     data_warehouse: str = "snowflake"
     orchestrator: str = "airflow"
@@ -97,7 +146,7 @@ class DbtGenerateRequest(BaseModel):
 
 
 class DagGenerateRequest(BaseModel):
-    business_request: str
+    business_request: str = Field(..., min_length=3, max_length=2000)
     cloud_provider: str = "aws"
     data_warehouse: str = "snowflake"
     orchestrator: str = "airflow"
@@ -116,6 +165,8 @@ class DagGenerateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _run_generation(job_id: str, req: GenerateRequest) -> None:
+    set_request_id(job_id)
+    _log.info("generation_started", extra={"job_id": job_id, "mode": req.mode})
     job_store.update(job_id, status="running")
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -157,7 +208,9 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
 
             serialized = _serialize_result(result)
             job_store.update(job_id, status="completed", result=serialized)
+            _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
     except Exception as exc:
+        _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
         job_store.update(job_id, status="failed", error=str(exc))
 
 
@@ -201,6 +254,20 @@ def _serialize_result(result: Any) -> dict:
 # App factory
 # ---------------------------------------------------------------------------
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    _log.info("datasphere_api_starting", extra={"version": _VERSION})
+    # Startup: verify job store is reachable
+    try:
+        job_store.list_all()
+        _log.info("job_store_ok")
+    except Exception as exc:
+        _log.error("job_store_unavailable", extra={"error": str(exc)})
+    yield
+    # Shutdown
+    _log.info("datasphere_api_stopping")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="DataSphere API",
@@ -210,17 +277,57 @@ def create_app() -> FastAPI:
             "**Mode 2** — Stack recommandée : vous donnez budget/volume/équipe, "
             "les agents recommandent."
         ),
-        version="1.0.0",
+        version=_VERSION,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=_lifespan,
     )
 
+    # ------------------------------------------------------------------
+    # CORS — restrict to configured origins (default: localhost only)
+    # ------------------------------------------------------------------
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=_CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
+
+    # ------------------------------------------------------------------
+    # Request ID + Rate limiting middleware
+    # ------------------------------------------------------------------
+    @app.middleware("http")
+    async def _request_middleware(request: Request, call_next):
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        set_request_id(req_id)
+
+        # Rate limiting on mutation endpoints
+        if request.method in ("POST", "PUT", "DELETE"):
+            ip = request.client.host if request.client else "unknown"
+            if not _rate_limiter.is_allowed(ip):
+                _log.warning("rate_limit_exceeded", extra={"ip": ip, "path": request.url.path})
+                return Response(
+                    content='{"detail":"Too many requests — rate limit exceeded"}',
+                    status_code=429,
+                    headers={"Content-Type": "application/json", "Retry-After": "60"},
+                )
+
+        start = time.monotonic()
+        response = await call_next(request)
+        duration_ms = round((time.monotonic() - start) * 1000)
+        response.headers["X-Request-ID"] = req_id
+        response.headers["X-Response-Time"] = f"{duration_ms}ms"
+        _log.info(
+            "http_request",
+            extra={
+                "method": request.method,
+                "path":   request.url.path,
+                "status": response.status_code,
+                "ms":     duration_ms,
+            },
+        )
+        return response
 
     # ------------------------------------------------------------------
     # Web UI
@@ -240,21 +347,54 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/health", tags=["system"])
+    @app.get("/healthz", tags=["system"])
     def health() -> dict:
-        return {"status": "ok", "version": "1.1.0", "timestamp": time.time(), **auth_status()}
+        """Liveness probe — always returns 200 if the process is alive."""
+        return {"status": "ok", "version": _VERSION, "timestamp": time.time(), **auth_status()}
+
+    @app.get("/readyz", tags=["system"])
+    def readyz() -> dict:
+        """Readiness probe — returns 503 if dependencies are unavailable."""
+        checks: dict[str, str] = {}
+        ok = True
+
+        # Check job store
+        try:
+            job_store.list_all()
+            checks["job_store"] = "ok"
+        except Exception as exc:
+            checks["job_store"] = f"error: {exc}"
+            ok = False
+
+        # Check temp dir writable
+        try:
+            with tempfile.NamedTemporaryFile(prefix="datasphere_ready_", delete=True):
+                pass
+            checks["tmp_dir"] = "ok"
+        except Exception as exc:
+            checks["tmp_dir"] = f"error: {exc}"
+            ok = False
+
+        status_code = 200 if ok else 503
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content={"status": "ready" if ok else "not_ready", "checks": checks, "version": _VERSION},
+            status_code=status_code,
+        )
 
     @app.get("/", tags=["system"])
     def root() -> dict:
         return {
             "name": "DataSphere Autonomous Data Platform",
-            "version": "1.1.0",
+            "version": _VERSION,
             "ui":   "/ui",
             "docs": "/docs",
             "health": "/health",
             "endpoints": [
                 "GET  /ui  → Interface web",
                 "POST /generate",
-                "GET  /generate/stream?job_id=<id>  → SSE streaming",
+                "GET  /generate/stream?job_id=<id>",
+                "GET  /healthz  /readyz",
                 "GET  /jobs/{job_id}",
                 "POST /proposals",
                 "POST /dbt/generate",
@@ -293,13 +433,12 @@ def create_app() -> FastAPI:
 
         Retourne un `job_id` à interroger via `GET /jobs/{job_id}`.
         """
-        if req.mode not in ("explicit", "recommended"):
-            raise HTTPException(status_code=422, detail="mode doit être 'explicit' ou 'recommended'")
         if not req.business_request:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
         job_id = str(uuid.uuid4())
         job_store.create(job_id, status="pending")
+        _log.info("job_enqueued", extra={"job_id": job_id, "mode": req.mode})
         background_tasks.add_task(_run_generation, job_id, req)
         return JobResponse(
             job_id=job_id,
@@ -310,16 +449,16 @@ def create_app() -> FastAPI:
     @app.post("/generate/sync", tags=["generation"])
     async def generate_sync(req: GenerateRequest, _: None = Depends(require_auth)) -> dict:
         """
-        Génération synchrone (bloquante). Pour les petites architectures ou tests.
+        Génération synchrone — exécutée dans un thread pool pour ne pas bloquer l'event loop.
+        Recommandé pour les tests et les petites architectures.
         """
-        if req.mode not in ("explicit", "recommended"):
-            raise HTTPException(status_code=422, detail="mode doit être 'explicit' ou 'recommended'")
         if not req.business_request:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
         job_id = str(uuid.uuid4())
         job_store.create(job_id, status="pending")
-        _run_generation(job_id, req)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _run_generation, job_id, req)
         job = job_store.get(job_id) or {}
         if job.get("status") == "failed":
             raise HTTPException(status_code=500, detail=job.get("error", "Generation failed"))
