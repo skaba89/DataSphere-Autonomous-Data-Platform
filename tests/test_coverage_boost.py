@@ -752,3 +752,277 @@ class TestModeRouterExplicitConstraints:
         raw = ctx.to_raw_constraints()
         assert raw["deployment"] == "managed"
         assert raw["iac"] == "terraform"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# mode_router.py interactive helpers: _pick, _ask_text, _interactive_mode1/2
+# (lines 125-176, 240-280)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestModeRouterPick:
+    """Tests for _pick in mode_router.py."""
+
+    def test_pick_valid_choice(self):
+        from datasphere.agents.mode_router import _pick, _CLOUD_OPTS
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.return_value = "2"
+            result = _pick("Choose cloud", _CLOUD_OPTS)
+        assert result == _CLOUD_OPTS[1][0]
+
+    def test_pick_default_on_empty_input(self):
+        from datasphere.agents.mode_router import _pick, _WH_OPTS
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.return_value = ""
+            result = _pick("Choose warehouse", _WH_OPTS, default_idx=0)
+        assert result == _WH_OPTS[0][0]
+
+    def test_pick_invalid_then_valid(self):
+        from datasphere.agents.mode_router import _pick, _ORCH_OPTS
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = ["xyz", "0", "3"]
+            result = _pick("Choose orchestrator", _ORCH_OPTS)
+        assert result == _ORCH_OPTS[2][0]
+
+    def test_ask_text_in_mode_router(self):
+        from datasphere.agents.mode_router import _ask_text
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.return_value = "my business need"
+            result = _ask_text("Besoin métier", default="")
+        assert result == "my business need"
+
+    def test_ask_text_mode_router_uses_default(self):
+        from datasphere.agents.mode_router import _ask_text
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.return_value = ""
+            result = _ask_text("Region", default="eu-west-1")
+        assert result == "eu-west-1"
+
+
+class TestInteractiveMode1:
+    """Tests for _interactive_mode1 — covers lines 149-190."""
+
+    def _mode1_inputs(self, cloud_num=2, include_region=True, region="eu-west-1"):
+        """Generate the full sequence of inputs for _interactive_mode1."""
+        # business, cloud, warehouse, orchestrator, ingestion, transformation,
+        # storage, bi, deploy, security, budget, volume, [region]
+        inputs = [
+            "Analyse les ventes",  # business request
+            str(cloud_num),        # cloud
+            "1",                   # warehouse
+            "1",                   # orchestrator
+            "1",                   # ingestion
+            "1",                   # transformation
+            "1",                   # storage
+            "1",                   # bi
+            "1",                   # deployment
+            "2",                   # security (rbac)
+            "2",                   # budget (medium)
+            "2",                   # volume (medium)
+        ]
+        if include_region:
+            inputs.append(region)
+        return inputs
+
+    def test_interactive_mode1_local_docker(self):
+        """_interactive_mode1 returns ExplicitStack for local-docker (no region)."""
+        from datasphere.agents.mode_router import _interactive_mode1
+        inputs = self._mode1_inputs(cloud_num=1, include_region=False)
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode1()
+        assert result.cloud_provider == "local-docker"
+        assert result.region is None
+
+    def test_interactive_mode1_aws_with_region(self):
+        """_interactive_mode1 returns ExplicitStack with region for AWS."""
+        from datasphere.agents.mode_router import _interactive_mode1
+        inputs = self._mode1_inputs(cloud_num=2, include_region=True, region="us-east-1")
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode1()
+        assert result.cloud_provider == "aws"
+        assert result.region == "us-east-1"
+
+    def test_interactive_mode1_enterprise_security(self):
+        """_interactive_mode1 maps enterprise security to RBAC+RLS+Vault."""
+        from datasphere.agents.mode_router import _interactive_mode1
+        inputs = [
+            "Enterprise pipeline",  # business
+            "1",  # local-docker
+            "1",  # warehouse
+            "1",  # orchestrator
+            "1",  # ingestion
+            "1",  # transformation
+            "5",  # storage (none)
+            "1",  # bi
+            "1",  # deployment docker-compose
+            "3",  # security enterprise
+            "3",  # budget enterprise
+            "4",  # volume xlarge
+        ]
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode1()
+        assert "RBAC" in result.security
+        assert "RLS" in result.security
+        assert "Vault" in result.security
+        assert result.data_lake is None  # "none" → None
+
+    def test_interactive_mode1_gcp_with_region(self):
+        """_interactive_mode1 asks for region when GCP chosen."""
+        from datasphere.agents.mode_router import _interactive_mode1
+        inputs = self._mode1_inputs(cloud_num=4, include_region=True, region="europe-west1")
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode1()
+        assert result.cloud_provider == "gcp"
+        assert result.region == "europe-west1"
+
+
+class TestInteractiveMode2:
+    """Tests for _interactive_mode2 — covers lines 240-280."""
+
+    def _mode2_inputs(self, cloud_pref_num=3, compliance_num=1,
+                     open_source="n", existing=""):
+        """Generate full input sequence for _interactive_mode2."""
+        return [
+            "Analyse données hospitalières",  # business
+            "2",                    # budget medium
+            "2",                    # volume medium
+            "2",                    # security rbac
+            "2",                    # team small
+            "1",                    # mode batch
+            str(cloud_pref_num),    # cloud pref (3=aws)
+            "1",                    # deploy pref (None)
+            str(compliance_num),    # compliance (1=none)
+            open_source,            # open source o/N
+            existing,               # existing tools
+        ]
+
+    def test_interactive_mode2_basic(self):
+        """_interactive_mode2 returns RecommendationContext with correct values."""
+        from datasphere.agents.mode_router import _interactive_mode2
+        inputs = self._mode2_inputs(cloud_pref_num=3, compliance_num=1)
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode2()
+        assert result.business_request == "Analyse données hospitalières"
+        assert result.budget == "medium"
+        assert result.security_level == "rbac"
+
+    def test_interactive_mode2_open_source_true(self):
+        """_interactive_mode2 sets must_be_open_source=True when user answers 'o'."""
+        from datasphere.agents.mode_router import _interactive_mode2
+        inputs = self._mode2_inputs(open_source="o")
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode2()
+        assert result.must_be_open_source is True
+
+    def test_interactive_mode2_compliance_rgpd(self):
+        """_interactive_mode2 captures RGPD compliance when selected."""
+        from datasphere.agents.mode_router import _interactive_mode2
+        inputs = self._mode2_inputs(compliance_num=2)  # 2=rgpd
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode2()
+        assert "RGPD" in result.compliance_requirements
+
+    def test_interactive_mode2_existing_tools(self):
+        """_interactive_mode2 parses comma-separated existing tools."""
+        from datasphere.agents.mode_router import _interactive_mode2
+        inputs = self._mode2_inputs(existing="spark, airflow")
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode2()
+        assert "spark" in result.existing_tools
+        assert "airflow" in result.existing_tools
+
+    def test_interactive_mode2_no_cloud_preference(self):
+        """_interactive_mode2 with no cloud preference (option 1) returns 'none'."""
+        from datasphere.agents.mode_router import _interactive_mode2
+        inputs = self._mode2_inputs(cloud_pref_num=1)  # 1=none
+        with patch("datasphere.agents.mode_router.console") as mock_console:
+            mock_console.input.side_effect = inputs
+            result = _interactive_mode2()
+        assert result.cloud_preference == "none"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Orchestrator step1, step4 — covers lines 63-77, 139-169, 174-227
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestOrchestratorStep1:
+    """Tests for _step1_business_request (lines 62-77)."""
+
+    def test_step1_valid_input(self):
+        """_step1_business_request returns the business request string."""
+        from datasphere.agents.orchestrator import _step1_business_request
+        with patch("datasphere.agents.orchestrator.console") as mock_console:
+            mock_console.input.return_value = "Analyse les ventes par agence"
+            result = _step1_business_request()
+        assert result == "Analyse les ventes par agence"
+
+    def test_step1_short_input_then_valid(self):
+        """_step1_business_request loops if input is too short."""
+        from datasphere.agents.orchestrator import _step1_business_request
+        with patch("datasphere.agents.orchestrator.console") as mock_console:
+            mock_console.input.side_effect = ["no", "short", "Long enough input"]
+            result = _step1_business_request()
+        assert result == "Long enough input"
+
+
+class TestOrchestratorStep4:
+    """Tests for _step4_choose_proposal (lines 139-169)."""
+
+    def test_step4_valid_choice(self):
+        """_step4_choose_proposal returns the chosen proposal by index."""
+        from datasphere.agents.orchestrator import _step4_choose_proposal
+        proposals = [make_proposal(), make_proposal(cloud="gcp", warehouse="bigquery")]
+        proposals[1].id = 2
+        with patch("datasphere.agents.orchestrator.console") as mock_console:
+            mock_console.input.return_value = "1"
+            chosen = _step4_choose_proposal(proposals)
+        assert chosen.id == 1
+
+    def test_step4_invalid_then_valid(self):
+        """_step4_choose_proposal loops on invalid input."""
+        from datasphere.agents.orchestrator import _step4_choose_proposal
+        proposals = [make_proposal()]
+        with patch("datasphere.agents.orchestrator.console") as mock_console:
+            mock_console.input.side_effect = ["x", "0", "1"]
+            chosen = _step4_choose_proposal(proposals)
+        assert chosen is proposals[0]
+
+
+class TestOrchestratorAgentOrchestratorRunInteractive:
+    """Tests for AgentOrchestrator.run_interactive (lines 439-458)."""
+
+    def test_run_interactive_calls_steps(self, tmp_path):
+        """AgentOrchestrator.run_interactive calls all 5 steps."""
+        from datasphere.agents.orchestrator import AgentOrchestrator
+        proposal = make_proposal()
+        with patch("datasphere.agents.orchestrator._step1_business_request",
+                   return_value="Test business") as mock_step1, \
+             patch("datasphere.agents.dialogue.collect_constraints",
+                   return_value={
+                       "cloud_provider": "aws", "budget": "medium",
+                       "data_volume": "medium", "processing_mode": "batch",
+                       "security": ["RBAC"], "deployment": "kubernetes",
+                       "iac": "helm", "region": None,
+                       "data_warehouse": "auto", "orchestrator": "auto",
+                       "ingestion": "auto", "transformation": "auto",
+                       "data_lake": "auto", "bi_tool": "auto",
+                       "catalog": "auto", "quality": "auto",
+                   }) as mock_collect, \
+             patch("datasphere.agents.orchestrator._step3_display_proposals") as mock_display, \
+             patch("datasphere.agents.orchestrator._step4_choose_proposal",
+                   return_value=proposal) as mock_choose, \
+             patch("datasphere.agents.orchestrator._step5_generate",
+                   return_value=OrchestratorOutput(request_summary="Test")) as mock_gen:
+            result = AgentOrchestrator().run_interactive(output_dir=str(tmp_path))
+        mock_step1.assert_called_once()
+        mock_collect.assert_called_once()
+        mock_display.assert_called_once()
+        mock_choose.assert_called_once()
+        mock_gen.assert_called_once()
