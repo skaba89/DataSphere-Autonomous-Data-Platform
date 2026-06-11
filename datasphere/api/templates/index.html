@@ -524,6 +524,7 @@
       <button class="tab" onclick="switchSubTab('dagster')">Dagster</button>
       <button class="tab" onclick="switchSubTab('prefect')">Prefect</button>
       <button class="tab" onclick="switchSubTab('terraform')">🏗 Terraform</button>
+      <button class="tab" onclick="switchSubTab('lineage')">🔗 Lineage</button>
     </div>
 
     <!-- dbt -->
@@ -718,6 +719,41 @@
           <button class="btn btn-primary" onclick="generateTerraform()">🏗 Générer les modules Terraform</button>
         </div>
         <div id="terraform-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Lineage -->
+    <div id="subtab-lineage" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <h3>Générer le diagramme de lineage</h3>
+          <div class="field">
+            <label>Stack JSON (validée)</label>
+            <textarea id="lineage-stack" rows="12" style="font-family:monospace; font-size:0.8rem;">{
+  "cloud_provider": "aws",
+  "data_warehouse": "snowflake",
+  "orchestrator": "airflow",
+  "ingestion": "airbyte",
+  "transformation": "dbt",
+  "bi_tool": "metabase",
+  "quality": "great-expectations",
+  "catalog": "datahub",
+  "deployment": "kubernetes"
+}</textarea>
+          </div>
+          <button class="btn btn-primary" onclick="generateLineage()">🔗 Générer le diagramme</button>
+        </div>
+        <div id="lineage-result" style="display:none;">
+          <div class="card">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+              <h3 style="margin:0;">Diagramme Mermaid</h3>
+              <button class="btn btn-secondary btn-sm" onclick="copyLineage()">📋 Copier</button>
+              <a id="lineage-live-link" href="#" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">🌐 mermaid.live</a>
+            </div>
+            <div id="lineage-meta" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"></div>
+            <pre id="lineage-code" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:14px; overflow-x:auto; font-size:0.78rem; white-space:pre;"></pre>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1366,6 +1402,42 @@ async function generateTerraform() {
   } catch (e) {
     div.innerHTML = `<p class="text-danger">${e.message}</p>`;
   }
+}
+
+// ============================================================
+// Lineage generator
+// ============================================================
+async function generateLineage() {
+  const stackJson = document.getElementById('lineage-stack').value;
+  let stack;
+  try { stack = JSON.parse(stackJson); } catch(e) { toast('JSON invalide', 'error'); return; }
+
+  const resultDiv = document.getElementById('lineage-result');
+  resultDiv.style.display = 'none';
+
+  try {
+    const res = await fetch('/lineage/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ stack, business_request: '' }),
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
+    const data = await res.json();
+
+    document.getElementById('lineage-code').textContent = data.mermaid;
+    document.getElementById('lineage-live-link').href = data.embed_url;
+    document.getElementById('lineage-meta').textContent =
+      `${data.nodes.length} nœuds · ${data.edge_count} connexions`;
+    resultDiv.style.display = 'block';
+    toast(`Lineage généré — ${data.nodes.length} nœuds`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function copyLineage() {
+  const code = document.getElementById('lineage-code').textContent;
+  navigator.clipboard.writeText(code).then(() => toast('Copié !', 'success'));
 }
 
 // ============================================================

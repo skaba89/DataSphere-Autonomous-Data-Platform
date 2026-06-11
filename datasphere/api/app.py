@@ -163,6 +163,11 @@ class DagGenerateRequest(BaseModel):
     processing_mode: str = "batch"
 
 
+class LineageRequest(BaseModel):
+    stack: dict
+    business_request: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -812,6 +817,24 @@ def create_app() -> FastAPI:
             "warehouse":  req.data_warehouse,
             "file_count": len(project.files),
             "files":      project.files,
+        }
+
+    # ------------------------------------------------------------------
+    # Lineage diagram generation
+    # ------------------------------------------------------------------
+
+    @app.post("/lineage/generate", tags=["generators"])
+    def generate_lineage(req: LineageRequest) -> dict:
+        """Génère un diagramme de lineage Mermaid depuis une stack validée."""
+        from datasphere.generators.lineage import LineageGenerator
+        gen = LineageGenerator()
+        output = gen.generate(req.stack, req.business_request)
+        embed_url = LineageGenerator.embed_url(output.mermaid)
+        return {
+            "mermaid": output.mermaid,
+            "nodes": output.nodes,
+            "edge_count": len(output.edges),
+            "embed_url": embed_url,
         }
 
     # ------------------------------------------------------------------
