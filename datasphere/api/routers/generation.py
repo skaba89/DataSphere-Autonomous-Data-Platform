@@ -120,7 +120,23 @@ async def generate(
     job_store.create(scoped_id, status="pending", meta=meta)
     metrics.record_job_created(mode=req.mode or "explicit")
     _log.info("job_enqueued", extra={"job_id": job_id, "scoped_id": scoped_id, "mode": req.mode, "tenant_id": get_tenant_id()})
-    background_tasks.add_task(_run_generation, scoped_id, req)
+
+    # ------------------------------------------------------------------
+    # ARQ integration -- use Redis queue when available; fall back to
+    # BackgroundTasks for single-process / development mode.
+    # ------------------------------------------------------------------
+    _arq_job = None
+    try:
+        from datasphere.api.worker import enqueue_generation as _enqueue_arq  # noqa: PLC0415
+        _arq_job = await _enqueue_arq(scoped_id, req.model_dump())
+    except Exception:  # pragma: no cover -- worker import failure is non-fatal
+        _arq_job = None
+
+    if _arq_job is None:
+        background_tasks.add_task(_run_generation, scoped_id, req)
+    else:
+        _log.info("job_sent_to_arq", extra={"job_id": job_id, "scoped_id": scoped_id})
+
     return JobResponse(
         job_id=job_id,
         status="pending",
