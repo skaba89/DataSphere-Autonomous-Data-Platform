@@ -943,7 +943,60 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # Webhooks
     # ------------------------------------------------------------------
 
-    @app.post("/webhooks", tags=["webhooks"])
+    @app.post(
+        "/webhooks",
+        tags=["webhooks"],
+        summary="Enregistrer un webhook",
+        description="""
+Enregistre une URL webhook pour recevoir des notifications HTTP sur les événements de jobs.
+
+**Événements disponibles:**
+- `job.completed` — job terminé avec succès
+- `job.failed` — job en erreur
+- `*` — tous les événements
+
+**Sécurité HMAC:** Si `secret` est fourni, le payload est signé avec HMAC-SHA256.
+Le header `X-DataSphere-Signature` contient la signature à vérifier côté récepteur.
+
+**Isolation multi-tenant:** Les webhooks sont isolés par tenant (`X-Tenant-ID`).
+        """,
+        response_description="Webhook enregistré avec son identifiant unique",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "all_events": {
+                                "summary": "Écouter tous les événements",
+                                "value": WEBHOOK_REQUEST_EXAMPLE,
+                            },
+                            "completed_only": {
+                                "summary": "Seulement job.completed",
+                                "value": {
+                                    "url": "https://myapp.example.com/webhooks/datasphere",
+                                    "events": ["job.completed"],
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "id": "wh_3fa85f64",
+                                "url": "https://hooks.example.com/datasphere",
+                                "events": ["job.completed", "job.failed"],
+                                "created_at": "2026-06-12T10:00:00Z",
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def register_webhook(req: WebhookRegisterRequest, _: None = Depends(require_auth)) -> dict:
         """Register a webhook URL to be notified on job events."""
         tenant_id = get_tenant_id()
@@ -1559,7 +1612,28 @@ Compare deux stacks et génère un plan de migration détaillé.
 
     from datasphere.generators.templates import template_registry as _template_registry
 
-    @app.get("/templates", tags=["templates"])
+    @app.get(
+        "/templates",
+        tags=["templates"],
+        summary="Lister les templates de stacks prédéfinis",
+        description="""
+Liste tous les templates de stacks data prédéfinis.
+
+**Filtres disponibles:**
+- `category` — catégorie du template (ex: `ecommerce`, `saas`, `startup`)
+- `budget` — tier de budget: `low`, `medium`, `high`
+
+Chaque template inclut:
+- La stack complète (cloud + warehouse + orchestrateur + BI…)
+- Estimation des coûts mensuels
+- Délai de déploiement estimé
+- Pros / cons
+- Cas d'usage typiques
+
+Utilisez `POST /generate/from-template` pour lancer une génération depuis un template.
+        """,
+        response_description="Liste des templates disponibles avec leurs métadonnées",
+    )
     def list_templates(category: str | None = None, budget: str | None = None) -> dict:
         """List all predefined stack templates, optionally filtered by category or budget."""
         templates = _template_registry.list_all()
@@ -1609,7 +1683,61 @@ Compare deux stacks et génère un plan de migration détaillé.
             "use_cases": t.use_cases,
         }
 
-    @app.post("/generate/from-template", response_model=JobResponse, tags=["generation"])
+    @app.post(
+        "/generate/from-template",
+        response_model=JobResponse,
+        tags=["generation"],
+        summary="Génération depuis un template prédéfini",
+        description="""
+Génère une architecture à partir d'un template prédéfini avec des surcharges optionnelles.
+
+Utilisez `GET /templates` pour lister les templates disponibles.
+
+**Surcharges (`overrides`):** remplacent les valeurs par défaut du template.
+Par exemple, pour changer le BI tool d'un template AWS:
+```json
+{"overrides": {"bi_tool": "metabase"}}
+```
+
+Le job est lancé en arrière-plan — suivez l'avancement via `GET /jobs/{job_id}`.
+        """,
+        response_description="Job créé depuis le template avec son identifiant",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "modern_data_stack": {
+                                "summary": "Modern Data Stack AWS avec override BI",
+                                "value": TEMPLATE_GENERATE_EXAMPLE,
+                            },
+                            "minimal_override": {
+                                "summary": "Template sans override",
+                                "value": {
+                                    "template_id": "startup-gcp",
+                                    "business_request": "Analyse des logs applicatifs",
+                                    "overrides": {},
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "status": "pending",
+                                "message": "Génération depuis template modern-data-stack-aws lancée",
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     async def generate_from_template(
         req: TemplateGenerateRequest,
         background_tasks: BackgroundTasks,
@@ -1717,6 +1845,19 @@ Compare deux stacks et génère un plan de migration détaillé.
             response_model=_route.response_model,
             include_in_schema=True,
         )
+
+    app.openapi_tags = [
+        {"name": "generation", "description": "Génération d'architectures data complètes"},
+        {"name": "generators", "description": "Générateurs de code (dbt, Airflow, Dagster, Prefect, Terraform)"},
+        {"name": "analysis", "description": "Analyse de stack (coûts, migration, lineage)"},
+        {"name": "templates", "description": "Templates de stacks prédéfinis"},
+        {"name": "webhooks", "description": "Notifications HTTP sur événements de job"},
+        {"name": "artifacts", "description": "Stockage et téléchargement des artefacts générés"},
+        {"name": "recommendations", "description": "Propositions d'architecture"},
+        {"name": "system", "description": "Health, métriques, plugins"},
+        {"name": "catalog", "description": "Catalogue des stacks et adaptateurs supportés"},
+        {"name": "v1", "description": "Routes versionnées (préfixe /v1/)"},
+    ]
 
     return app
 
