@@ -265,11 +265,33 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
                 metrics.record_job_completed(mode=req.mode, duration_s=time.time() - job_start)
                 _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
                 webhook_registry.fire("job.completed", job_id, get_tenant_id(), {"success": True})
+                job_meta = job_store.get(job_id) or {}
+                meta = job_meta.get("meta", {})
+                notification_service.notify_async(
+                    job_id=job_id,
+                    status="completed",
+                    result=serialized,
+                    duration_s=time.time() - job_start,
+                    tenant_id=meta.get("tenant_id", "default"),
+                    slack_url=meta.get("slack_webhook", ""),
+                    teams_url=meta.get("teams_webhook", ""),
+                )
         except Exception as exc:
             _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
             job_store.update(job_id, status="failed", error=str(exc))
             metrics.record_job_failed(mode=req.mode)
             webhook_registry.fire("job.failed", job_id, get_tenant_id(), {"error": str(exc)})
+            job_meta = job_store.get(job_id) or {}
+            meta = job_meta.get("meta", {})
+            notification_service.notify_async(
+                job_id=job_id,
+                status="failed",
+                result=None,
+                duration_s=time.time() - job_start,
+                tenant_id=meta.get("tenant_id", "default"),
+                slack_url=meta.get("slack_webhook", ""),
+                teams_url=meta.get("teams_webhook", ""),
+            )
 
 
 def _serialize_result(result: Any) -> dict:
@@ -402,7 +424,7 @@ def create_app() -> FastAPI:
         allow_origins=_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID", "X-Slack-Webhook", "X-Teams-Webhook"],
     )
 
     # ------------------------------------------------------------------
@@ -586,6 +608,7 @@ def create_app() -> FastAPI:
     @app.post("/generate", response_model=JobResponse, tags=["generation"])
     async def generate(
         req: GenerateRequest,
+        request: Request,
         background_tasks: BackgroundTasks,
         _: None = Depends(require_auth),
     ) -> JobResponse:
@@ -599,7 +622,14 @@ def create_app() -> FastAPI:
 
         job_id = str(uuid.uuid4())
         scoped_id = tenant_job_id(job_id)
-        job_store.create(scoped_id, status="pending")
+        slack_webhook = request.headers.get("X-Slack-Webhook", "")
+        teams_webhook = request.headers.get("X-Teams-Webhook", "")
+        meta: dict = {"tenant_id": get_tenant_id()}
+        if slack_webhook:
+            meta["slack_webhook"] = slack_webhook
+        if teams_webhook:
+            meta["teams_webhook"] = teams_webhook
+        job_store.create(scoped_id, status="pending", meta=meta)
         metrics.record_job_created(mode=req.mode or "explicit")
         _log.info("job_enqueued", extra={"job_id": job_id, "scoped_id": scoped_id, "mode": req.mode, "tenant_id": get_tenant_id()})
         background_tasks.add_task(_run_generation, scoped_id, req)
