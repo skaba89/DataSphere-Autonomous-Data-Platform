@@ -32,6 +32,9 @@ from datasphere.api.sse import make_sse_response
 from datasphere.api.logging_config import setup_logging, get_logger, set_request_id
 from datasphere.api.tracing import setup_tracing, start_span
 from datasphere.api.tenancy import get_tenant_id, set_tenant_id, tenant_job_id, validate_tenant_id
+from datasphere.api.webhooks import webhook_registry
+from datasphere.api.artifact_store import artifact_store
+from datasphere.api.metrics import metrics
 
 setup_logging()
 _log = get_logger(__name__)
@@ -180,6 +183,12 @@ class StackDiffRequest(BaseModel):
     to_stack: dict
 
 
+class WebhookRegisterRequest(BaseModel):
+    url: str = Field(..., description="URL to POST to when events fire")
+    events: list[str] = Field(default=["*"], description="Events: job.completed, job.failed, or *")
+    secret: str = Field(default="", description="Optional HMAC signing secret")
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -228,11 +237,28 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
                     result = run_recommended(ctx, output_dir=tmp, verbose=False)
 
                 serialized = _serialize_result(result)
+
+                # Persist generated files to artifact store
+                all_files: dict[str, str] = {}
+                for agent_name in ("infrastructure", "deployment"):
+                    agent_out = getattr(result, agent_name, None)
+                    if agent_out and agent_out.artifacts:
+                        for fname, content in agent_out.artifacts.items():
+                            all_files[f"{agent_name}/{fname}"] = str(content)
+                if all_files:
+                    try:
+                        artifact_store.save_files(job_id, all_files)
+                        serialized["artifact_count"] = len(all_files)
+                    except Exception as exc:
+                        _log.warning("artifact_save_failed job=%s error=%s", job_id, exc)
+
                 job_store.update(job_id, status="completed", result=serialized)
                 _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
+                webhook_registry.fire("job.completed", job_id, get_tenant_id(), {"success": True})
         except Exception as exc:
             _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
             job_store.update(job_id, status="failed", error=str(exc))
+            webhook_registry.fire("job.failed", job_id, get_tenant_id(), {"error": str(exc)})
 
 
 def _serialize_result(result: Any) -> dict:
@@ -460,6 +486,14 @@ def create_app() -> FastAPI:
             checks["tmp_dir"] = f"error: {exc}"
             ok = False
 
+        # Check artifact store is accessible
+        try:
+            artifact_store.list_files("__health_check__")
+            checks["artifact_store"] = "ok"
+        except Exception as exc:
+            checks["artifact_store"] = f"error: {exc}"
+            ok = False
+
         status_code = 200 if ok else 503
         from fastapi.responses import JSONResponse
         return JSONResponse(
@@ -639,11 +673,79 @@ def create_app() -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="datasphere-{job_id[:8]}.zip"'},
         )
 
+    # ------------------------------------------------------------------
+    # Artifact storage endpoints
+    # ------------------------------------------------------------------
+
+    @app.get("/artifacts/{job_id}/download", tags=["artifacts"])
+    def download_artifacts_zip(job_id: str) -> Response:
+        """Download all artifacts for a job as a ZIP archive."""
+        zip_bytes = artifact_store.get_zip(job_id)
+        if zip_bytes is None:
+            raise HTTPException(status_code=404, detail="No artifacts found for this job")
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="artifacts-{job_id[:8]}.zip"'},
+        )
+
+    @app.get("/artifacts/{job_id}", tags=["artifacts"])
+    def list_artifacts(job_id: str) -> dict:
+        """List all stored artifacts for a job."""
+        files = artifact_store.list_files(job_id)
+        return {"job_id": job_id, "files": files, "count": len(files)}
+
+    @app.get("/artifacts/{job_id}/{filename:path}", tags=["artifacts"])
+    def get_artifact(job_id: str, filename: str) -> Response:
+        """Download a single artifact file."""
+        content = artifact_store.get_file(job_id, filename)
+        if content is None:
+            raise HTTPException(status_code=404, detail=f"Artifact {filename} not found")
+        media_type = "text/plain"
+        if filename.endswith(".json"):
+            media_type = "application/json"
+        elif filename.endswith((".yml", ".yaml")):
+            media_type = "text/yaml"
+        elif filename.endswith(".tf"):
+            media_type = "text/plain"
+        return Response(content=content, media_type=media_type)
+
     @app.post("/jobs/purge", tags=["generation"])
     def purge_jobs(max_age_hours: int = 24) -> dict:
         """Supprime les jobs plus vieux que max_age_hours."""
         deleted = job_store.purge_old(max_age_hours * 3600)
         return {"deleted_count": deleted}
+
+    # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+
+    @app.post("/webhooks", tags=["webhooks"])
+    def register_webhook(req: WebhookRegisterRequest, _: None = Depends(require_auth)) -> dict:
+        """Register a webhook URL to be notified on job events."""
+        tenant_id = get_tenant_id()
+        wh = webhook_registry.register(req.url, tenant_id, req.events, req.secret)
+        return {"id": wh.id, "url": wh.url, "events": wh.events, "created_at": wh.created_at}
+
+    @app.get("/webhooks", tags=["webhooks"])
+    def list_webhooks(_: None = Depends(require_auth)) -> list[dict]:
+        """List all webhooks for current tenant."""
+        tenant_id = get_tenant_id()
+        return [{"id": w.id, "url": w.url, "events": w.events, "active": w.active}
+                for w in webhook_registry.list_for_tenant(tenant_id)]
+
+    @app.get("/webhooks/deliveries", tags=["webhooks"])
+    def webhook_deliveries(_: None = Depends(require_auth)) -> list[dict]:
+        """Recent webhook delivery attempts for current tenant."""
+        return webhook_registry.recent_deliveries(get_tenant_id())
+
+    @app.delete("/webhooks/{webhook_id}", tags=["webhooks"])
+    def delete_webhook(webhook_id: str, _: None = Depends(require_auth)) -> dict:
+        """Unregister a webhook."""
+        tenant_id = get_tenant_id()
+        if not webhook_registry.unregister(webhook_id, tenant_id):
+            raise HTTPException(status_code=404, detail="Webhook not found")
+        return {"deleted": webhook_id}
 
     # ------------------------------------------------------------------
     # Proposals (Mode 2)
