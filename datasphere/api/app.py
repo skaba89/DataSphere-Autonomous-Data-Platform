@@ -197,6 +197,7 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
     set_request_id(job_id)
     _log.info("generation_started", extra={"job_id": job_id, "mode": req.mode})
     job_store.update(job_id, status="running")
+    job_start = time.time()
     with start_span("generation.run", {"job_id": job_id, "mode": req.mode}):
         try:
             with tempfile.TemporaryDirectory() as tmp:
@@ -253,6 +254,7 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
                         _log.warning("artifact_save_failed job=%s error=%s", job_id, exc)
 
                 job_store.update(job_id, status="completed", result=serialized)
+                metrics.record_job_completed(mode=req.mode, duration_s=time.time() - job_start)
                 _log.info("generation_completed", extra={"job_id": job_id, "success": result.success})
                 webhook_registry.fire("job.completed", job_id, get_tenant_id(), {"success": True})
         except Exception as exc:
@@ -426,6 +428,12 @@ def create_app() -> FastAPI:
             response = await call_next(request)
             duration_ms = round((time.monotonic() - start) * 1000)
             span.set_attribute("http.status_code", response.status_code)
+        metrics.record_http_request(
+            request.method,
+            request.url.path,
+            response.status_code,
+            (time.monotonic() - start),
+        )
         response.headers["X-Request-ID"] = req_id
         response.headers["X-Response-Time"] = f"{duration_ms}ms"
         response.headers["X-Tenant-ID"] = tenant_id
