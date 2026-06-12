@@ -35,3 +35,4 @@ node_modules/
 .terraform.lock.hcl
 charts/
 *.tgz
+.claude/worktrees/
