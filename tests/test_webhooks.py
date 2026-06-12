@@ -237,3 +237,115 @@ def test_api_deliveries_endpoint(api_client, fresh_registry):
     assert len(items) == 1
     assert items[0]["success"] is True
     assert items[0]["event"] == "job.completed"
+
+
+# ---------------------------------------------------------------------------
+# Persistence tests — _SQLiteWebhookStore and WebhookRegistry with store
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sqlite_store(tmp_path):
+    """Return a fresh _SQLiteWebhookStore backed by a temp file."""
+    from datasphere.api.webhooks import _SQLiteWebhookStore
+    return _SQLiteWebhookStore(str(tmp_path / "webhooks.db"))
+
+
+def test_sqlite_store_save_and_list(sqlite_store):
+    from datasphere.api.webhooks import WebhookRegistration
+    wh = WebhookRegistration(
+        id="wh-001",
+        url="https://example.com/hook",
+        tenant_id="tenant1",
+        events=["job.completed"],
+        secret="s3cr3t",
+        created_at=time.time(),
+        active=True,
+    )
+    sqlite_store.save_webhook(wh)
+    result = sqlite_store.list_webhooks("tenant1")
+    assert len(result) == 1
+    assert result[0].id == "wh-001"
+    assert result[0].url == "https://example.com/hook"
+    assert result[0].events == ["job.completed"]
+    assert result[0].secret == "s3cr3t"
+
+
+def test_sqlite_store_delete(sqlite_store):
+    from datasphere.api.webhooks import WebhookRegistration
+    wh = WebhookRegistration(
+        id="wh-002",
+        url="https://example.com/hook",
+        tenant_id="tenant1",
+        events=["*"],
+        created_at=time.time(),
+    )
+    sqlite_store.save_webhook(wh)
+    assert len(sqlite_store.list_webhooks("tenant1")) == 1
+    deleted = sqlite_store.delete_webhook("wh-002")
+    assert deleted is True
+    assert sqlite_store.list_webhooks("tenant1") == []
+    # Deleting again returns False
+    assert sqlite_store.delete_webhook("wh-002") is False
+
+
+def test_sqlite_store_delivery_saved(sqlite_store):
+    from datasphere.api.webhooks import WebhookRegistration, WebhookDelivery
+    wh = WebhookRegistration(
+        id="wh-003",
+        url="https://example.com/hook",
+        tenant_id="tenantX",
+        events=["*"],
+        created_at=time.time(),
+    )
+    sqlite_store.save_webhook(wh)
+    delivery = WebhookDelivery(
+        webhook_id="wh-003",
+        job_id="job-abc",
+        event="job.completed",
+        attempts=1,
+        last_status_code=200,
+        success=True,
+        delivered_at=time.time(),
+    )
+    sqlite_store.save_delivery(delivery)
+    rows = sqlite_store.recent_deliveries({"tenantX"}, limit=10)
+    assert len(rows) == 1
+    assert rows[0]["success"] is True
+    assert rows[0]["event"] == "job.completed"
+    assert rows[0]["job_id"] == "job-abc"
+
+
+def test_registry_with_sqlite_store_persists(tmp_path):
+    """Webhook registered via registry should be readable from the store directly."""
+    from datasphere.api.webhooks import _SQLiteWebhookStore, WebhookRegistry
+    db = str(tmp_path / "wh.db")
+    store = _SQLiteWebhookStore(db)
+    reg = WebhookRegistry(store=store)
+    wh = reg.register("https://persist.example.com/hook", "tenantP", ["job.failed"])
+    # Read back directly from the store (bypass registry memory)
+    from_store = store.list_webhooks("tenantP")
+    assert len(from_store) == 1
+    assert from_store[0].id == wh.id
+    assert from_store[0].url == "https://persist.example.com/hook"
+
+
+def test_registry_loads_from_store_on_list(tmp_path):
+    """Webhooks inserted directly into the store appear when listing via a new registry."""
+    from datasphere.api.webhooks import _SQLiteWebhookStore, WebhookRegistry, WebhookRegistration
+    db = str(tmp_path / "wh2.db")
+    store = _SQLiteWebhookStore(db)
+    # Insert directly into the store, bypassing any registry
+    wh = WebhookRegistration(
+        id="wh-direct",
+        url="https://direct.example.com/hook",
+        tenant_id="tenantD",
+        events=["*"],
+        created_at=time.time(),
+    )
+    store.save_webhook(wh)
+    # A brand-new registry backed by the same store should see it
+    reg = WebhookRegistry(store=store)
+    webhooks = reg.list_for_tenant("tenantD")
+    assert len(webhooks) == 1
+    assert webhooks[0].id == "wh-direct"
+    assert webhooks[0].url == "https://direct.example.com/hook"
