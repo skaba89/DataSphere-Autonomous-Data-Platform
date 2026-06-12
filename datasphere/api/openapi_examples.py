@@ -12,6 +12,7 @@ GENERATE_REQUEST_EXAMPLE = {
     "deployment": "kubernetes",
     "budget": "medium",
     "security": ["RBAC"],
+    "git_init": False,
 }
 
 GENERATE_RESPONSE_EXAMPLE = {
