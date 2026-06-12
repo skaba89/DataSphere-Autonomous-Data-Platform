@@ -18,6 +18,17 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
+from datasphere.api.openapi_examples import (
+    GENERATE_REQUEST_EXAMPLE,
+    GENERATE_RESPONSE_EXAMPLE,
+    DBT_REQUEST_EXAMPLE,
+    TERRAFORM_REQUEST_EXAMPLE,
+    LINEAGE_REQUEST_EXAMPLE,
+    COST_ESTIMATE_REQUEST_EXAMPLE,
+    STACK_DIFF_REQUEST_EXAMPLE,
+    WEBHOOK_REQUEST_EXAMPLE,
+    TEMPLATE_GENERATE_EXAMPLE,
+)
 from datasphere.plugins import plugin_registry
 from datasphere.models.request import ArchitectureConstraints, BusinessRequest
 from datasphere.models.modes import ExplicitStack, RecommendationContext
@@ -404,13 +415,48 @@ async def _lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="DataSphere API",
-        description=(
-            "API REST pour la génération automatique d'architectures data.\n\n"
-            "**Mode 1** — Stack explicite : vous choisissez chaque outil.\n\n"
-            "**Mode 2** — Stack recommandée : vous donnez budget/volume/équipe, "
-            "les agents recommandent."
-        ),
+        description="""
+# DataSphere Autonomous Data Platform API
+
+API REST pour la génération automatique d'architectures data complètes.
+
+## Fonctionnalités principales
+
+- **Génération d'architecture** — 6 agents IA analysent votre besoin et génèrent une stack complète
+- **Générateurs de code** — dbt, Airflow, Dagster, Prefect, Terraform
+- **Analyse** — estimation de coûts multi-cloud, plan de migration, diagramme de lineage
+- **Templates** — stacks prédéfinis pour démarrer rapidement
+- **Webhooks** — notifications HTTP quand un job se termine
+- **Métriques** — endpoint Prometheus-compatible `/metrics`
+
+## Authentification
+
+Optionnelle — activée en définissant `DATASPHERE_API_KEY` en variable d'environnement.
+
+```
+Authorization: Bearer <votre-clé>
+```
+
+## Multi-tenant
+
+Isolez vos jobs par tenant via le header `X-Tenant-ID`.
+
+## Streaming (SSE)
+
+```
+POST /generate → job_id
+GET /generate/stream?job_id=<id> → EventSource
+```
+        """,
         version=_VERSION,
+        contact={
+            "name": "DataSphere Team",
+            "url": "https://github.com/skaba89/datasphere-autonomous-data-platform",
+        },
+        license_info={
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT",
+        },
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=_lifespan,
@@ -639,12 +685,67 @@ def create_app() -> FastAPI:
             message=f"Génération lancée. Interrogez GET /jobs/{job_id}",
         )
 
-    @app.post("/generate/sync", tags=["generation"])
+    @app.post(
+        "/generate/sync",
+        tags=["generation"],
+        summary="Génération synchrone d'architecture",
+        description="""
+Génère une architecture data complète de façon synchrone.
+
+Exécutée dans un thread pool pour ne pas bloquer l'event loop.
+
+**Modes disponibles:**
+- `explicit` — vous choisissez chaque outil de la stack
+- `recommended` — les agents recommandent la meilleure stack selon vos contraintes
+
+**Agents impliqués:**
+1. Stack Advisor — valide et optimise la stack
+2. Cloud Architect — dimensionne l'infrastructure
+3. Infrastructure Generator — génère les fichiers IaC
+4. Cost Optimizer — estime les coûts avec comparaison multi-cloud
+5. Security & Compliance — vérifie RBAC, SOC2, GDPR
+6. Deployment Generator — génère le pipeline CI/CD
+
+Recommandé pour les tests et les petites architectures.
+Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (SSE).
+        """,
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "explicit_aws_snowflake": {
+                                "summary": "Stack explicite AWS + Snowflake",
+                                "value": GENERATE_REQUEST_EXAMPLE,
+                            },
+                            "recommended_mode": {
+                                "summary": "Mode recommandé (agents choisissent)",
+                                "value": {
+                                    "mode": "recommended",
+                                    "business_request": "Startup analytics avec budget limité",
+                                    "budget": "low",
+                                    "data_volume": "small",
+                                    "team_size": "small",
+                                    "must_be_open_source": True,
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": GENERATE_RESPONSE_EXAMPLE,
+                        }
+                    }
+                }
+            },
+        },
+    )
     async def generate_sync(req: GenerateRequest, _: None = Depends(require_auth)) -> dict:
-        """
-        Génération synchrone — exécutée dans un thread pool pour ne pas bloquer l'event loop.
-        Recommandé pour les tests et les petites architectures.
-        """
+        """Génération synchrone d'architecture data complète."""
         if not req.business_request:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
