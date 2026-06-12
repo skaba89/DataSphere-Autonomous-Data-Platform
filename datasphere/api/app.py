@@ -651,18 +651,70 @@ GET /generate/stream?job_id=<id> → EventSource
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
         return make_sse_response(actual_id)
 
-    @app.post("/generate", response_model=JobResponse, tags=["generation"])
+    @app.post(
+        "/generate",
+        response_model=JobResponse,
+        tags=["generation"],
+        summary="Génération asynchrone d'architecture",
+        description="""
+Lance la génération asynchrone d'une architecture data complète.
+
+Retourne un `job_id` immédiatement. Interrogez l'état via:
+- `GET /jobs/{job_id}` — polling
+- `GET /generate/stream?job_id=<id>` — Server-Sent Events (temps réel)
+
+**Headers optionnels:**
+- `X-Tenant-ID` — isolation multi-tenant
+- `X-Slack-Webhook` — notification Slack à la fin du job
+- `X-Teams-Webhook` — notification Microsoft Teams
+        """,
+        response_description="Job créé avec son identifiant unique",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "explicit_aws_snowflake": {
+                                "summary": "Stack explicite AWS + Snowflake",
+                                "value": GENERATE_REQUEST_EXAMPLE,
+                            },
+                            "recommended_mode": {
+                                "summary": "Mode recommandé",
+                                "value": {
+                                    "mode": "recommended",
+                                    "business_request": "Startup analytics avec budget limité",
+                                    "budget": "low",
+                                    "data_volume": "small",
+                                    "team_size": "small",
+                                    "must_be_open_source": True,
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "status": "pending",
+                                "message": "Génération lancée. Interrogez GET /jobs/3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     async def generate(
         req: GenerateRequest,
         request: Request,
         background_tasks: BackgroundTasks,
         _: None = Depends(require_auth),
     ) -> JobResponse:
-        """
-        Lance la génération asynchrone d'une architecture data complète.
-
-        Retourne un `job_id` à interroger via `GET /jobs/{job_id}`.
-        """
+        """Lance la génération asynchrone d'une architecture data complète."""
         if not req.business_request:
             raise HTTPException(status_code=422, detail="business_request est requis")
 
@@ -976,12 +1028,73 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # dbt project generation
     # ------------------------------------------------------------------
 
-    @app.post("/dbt/generate", tags=["generators"])
+    @app.post(
+        "/dbt/generate",
+        tags=["generators"],
+        summary="Génération de projet dbt",
+        description="""
+Génère un scaffold dbt complet prêt à l'emploi.
+
+**Fichiers générés:**
+- `dbt_project.yml` — configuration du projet
+- `profiles.yml` — connexion au data warehouse
+- `models/staging/` — modèles de staging par source
+- `models/marts/` — modèles de marts analytiques
+- `tests/` — tests génériques et singuliers
+- `macros/` — macros utilitaires
+
+Le nom du projet est dérivé du `business_request`.
+        """,
+        response_description="Projet dbt avec le contenu de chaque fichier généré",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "ventes_snowflake": {
+                                "summary": "Analyse ventes sur Snowflake",
+                                "value": DBT_REQUEST_EXAMPLE,
+                            },
+                            "full_stack": {
+                                "summary": "Stack complète AWS",
+                                "value": {
+                                    "business_request": "Pipeline e-commerce complet",
+                                    "cloud_provider": "aws",
+                                    "data_warehouse": "snowflake",
+                                    "orchestrator": "airflow",
+                                    "ingestion": "airbyte",
+                                    "transformation": "dbt",
+                                    "bi_tool": "metabase",
+                                    "deployment": "kubernetes",
+                                    "security": ["RBAC"],
+                                    "budget": "medium",
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "project_name": "ventes_par_region",
+                                "warehouse": "snowflake",
+                                "file_count": 8,
+                                "files": {
+                                    "dbt_project.yml": "name: ventes_par_region\n...",
+                                    "profiles.yml": "ventes_par_region:\n  target: dev\n...",
+                                },
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def generate_dbt_project(req: DbtGenerateRequest) -> dict:
-        """
-        Génère un scaffold dbt complet (dbt_project.yml, profiles.yml, modèles, tests).
-        Retourne le contenu de chaque fichier.
-        """
+        """Génère un scaffold dbt complet (dbt_project.yml, profiles.yml, modèles, tests)."""
         constraints = ArchitectureConstraints(
             cloud_provider=req.cloud_provider,
             data_warehouse=req.data_warehouse,
@@ -1100,7 +1213,56 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # Terraform / IaC generation
     # ------------------------------------------------------------------
 
-    @app.post("/terraform/generate", tags=["generators"])
+    @app.post(
+        "/terraform/generate",
+        tags=["generators"],
+        summary="Génération de projet Terraform",
+        description="""
+Génère un projet Terraform complet pour déployer l'infrastructure data.
+
+**Modules générés:**
+- `providers.tf` — configuration des providers cloud (AWS/GCP/Azure)
+- `networking/` — VPC, subnets, security groups
+- `warehouse/` — Snowflake / BigQuery / Redshift
+- `kubernetes/` — EKS / GKE / AKS cluster
+- `iam/` — rôles, policies, service accounts
+- `variables.tf` + `outputs.tf`
+
+Utilise les modules Terraform officiels des providers cloud.
+        """,
+        response_description="Projet Terraform avec le contenu de chaque fichier .tf",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "aws_snowflake_k8s": {
+                                "summary": "AWS + Snowflake + Kubernetes",
+                                "value": TERRAFORM_REQUEST_EXAMPLE,
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "provider": "aws",
+                                "warehouse": "snowflake",
+                                "file_count": 12,
+                                "files": {
+                                    "providers.tf": 'terraform {\n  required_providers {\n    aws = {}\n  }\n}\n',
+                                    "networking/main.tf": "# VPC configuration\n...",
+                                },
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def generate_terraform(req: DagGenerateRequest) -> dict:
         """Génère un projet Terraform complet (providers, modules networking/warehouse/k8s/IAM)."""
         try:
@@ -1135,7 +1297,68 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # Lineage diagram generation
     # ------------------------------------------------------------------
 
-    @app.post("/lineage/generate", tags=["generators"])
+    @app.post(
+        "/lineage/generate",
+        tags=["generators"],
+        summary="Génération du diagramme de lineage",
+        description="""
+Génère un diagramme de lineage des données au format **Mermaid** depuis une stack validée.
+
+Le diagramme représente le flux de données de l'ingestion jusqu'au BI tool:
+
+```
+Source → Ingestion → Data Lake → Warehouse → Transformation → BI
+```
+
+**Résultat:**
+- `mermaid` — code Mermaid embedable directement dans Markdown/Notion
+- `nodes` — liste des noeuds du graphe
+- `edge_count` — nombre de connexions
+- `embed_url` — URL mermaid.live pour visualisation directe
+        """,
+        response_description="Diagramme Mermaid et métadonnées du graphe de lineage",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "stack_complete": {
+                                "summary": "Stack AWS complète avec quality",
+                                "value": LINEAGE_REQUEST_EXAMPLE,
+                            },
+                            "minimal": {
+                                "summary": "Stack minimale",
+                                "value": {
+                                    "stack": {
+                                        "cloud_provider": "gcp",
+                                        "data_warehouse": "bigquery",
+                                        "orchestrator": "dagster",
+                                        "ingestion": "airbyte",
+                                        "transformation": "dbt",
+                                        "bi_tool": "looker",
+                                    }
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "mermaid": "graph LR\n  Source-->Airbyte-->Snowflake-->dbt-->Metabase",
+                                "nodes": ["Source", "Airbyte", "Snowflake", "dbt", "Metabase"],
+                                "edge_count": 4,
+                                "embed_url": "https://mermaid.live/edit#...",
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def generate_lineage(req: LineageRequest) -> dict:
         """Génère un diagramme de lineage Mermaid depuis une stack validée."""
         from datasphere.generators.lineage import LineageGenerator
@@ -1153,7 +1376,70 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # Cost estimation
     # ------------------------------------------------------------------
 
-    @app.post("/costs/estimate", tags=["analysis"])
+    @app.post(
+        "/costs/estimate",
+        tags=["analysis"],
+        summary="Estimation des coûts de la stack",
+        description="""
+Calcule une estimation détaillée des coûts mensuels et annuels pour une stack donnée.
+
+**Inclut:**
+- Détail par composant (warehouse, orchestration, ingestion, BI…)
+- Comparaison multi-cloud (AWS vs GCP vs Azure)
+- Conseils d'optimisation des coûts
+- Tiers budget: `low` / `medium` / `high`
+
+Les prix sont basés sur les tarifs publics des fournisseurs cloud (mis à jour périodiquement).
+        """,
+        response_description="Estimation des coûts avec détail par composant et comparaison multi-cloud",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "aws_medium": {
+                                "summary": "Stack AWS budget medium",
+                                "value": COST_ESTIMATE_REQUEST_EXAMPLE,
+                            },
+                            "gcp_low": {
+                                "summary": "Stack GCP budget low",
+                                "value": {
+                                    "stack": {
+                                        "cloud_provider": "gcp",
+                                        "data_warehouse": "bigquery",
+                                        "orchestrator": "dagster",
+                                        "ingestion": "airbyte",
+                                        "transformation": "dbt",
+                                        "bi_tool": "metabase",
+                                    },
+                                    "budget": "low",
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "total_monthly_usd": 1250,
+                                "total_yearly_usd": 15000,
+                                "budget_tier": "medium",
+                                "line_items": [
+                                    {"component": "data_warehouse", "tool": "snowflake", "monthly_usd": 400, "yearly_usd": 4800, "notes": "Standard edition"},
+                                    {"component": "orchestrator", "tool": "airflow", "monthly_usd": 150, "yearly_usd": 1800, "notes": "MWAA managed"},
+                                ],
+                                "savings_tips": ["Consider Snowflake auto-suspend", "Use spot instances for Airflow workers"],
+                                "comparison": {"aws": 1250, "gcp": 1100, "azure": 1350},
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def estimate_cost(req: CostEstimateRequest) -> dict:
         """Estimate detailed cost breakdown for a stack with multi-cloud comparison."""
         from datasphere.agents.cost_tables import CostCalculator
@@ -1181,7 +1467,66 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
     # Stack diff & migration plan
     # ------------------------------------------------------------------
 
-    @app.post("/stacks/diff", tags=["analysis"])
+    @app.post(
+        "/stacks/diff",
+        tags=["analysis"],
+        summary="Comparaison et plan de migration entre deux stacks",
+        description="""
+Compare deux stacks et génère un plan de migration détaillé.
+
+**Résultat:**
+- `summary` — résumé textuel des changements
+- `changes` — liste des composants modifiés avec effort/risque/étapes
+- `migration_order` — ordre recommandé pour migrer sans interruption
+- `rollback_strategy` — stratégie de rollback si la migration échoue
+- `total_estimated_days` — durée totale estimée
+
+**Niveaux de risque:** `low` / `medium` / `high` / `critical`
+**Niveaux d'effort:** `low` / `medium` / `high`
+        """,
+        response_description="Plan de migration avec les changements détaillés entre les deux stacks",
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "redshift_to_snowflake": {
+                                "summary": "Migration Redshift → Snowflake + Dagster",
+                                "value": STACK_DIFF_REQUEST_EXAMPLE,
+                            },
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "content": {
+                        "application/json": {
+                            "example": {
+                                "summary": "Migration de Redshift/Airflow vers Snowflake/Dagster",
+                                "total_estimated_days": 45,
+                                "overall_risk": "medium",
+                                "migration_order": ["data_warehouse", "ingestion", "orchestrator", "bi_tool"],
+                                "rollback_strategy": "Keep Redshift running in parallel for 30 days",
+                                "changes": [
+                                    {
+                                        "component": "data_warehouse",
+                                        "from_tool": "redshift",
+                                        "to_tool": "snowflake",
+                                        "change_type": "replace",
+                                        "effort": "high",
+                                        "risk": "medium",
+                                        "estimated_days": 20,
+                                        "migration_steps": ["Export data", "Transform schemas", "Load to Snowflake", "Validate"],
+                                    }
+                                ],
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    )
     def stack_diff(req: StackDiffRequest) -> dict:
         """Compare two stacks and generate a migration plan."""
         from datasphere.generators.stack_diff import StackDiffGenerator
