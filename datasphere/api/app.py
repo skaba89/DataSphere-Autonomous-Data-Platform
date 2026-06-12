@@ -170,6 +170,7 @@ class GenerateRequest(BaseModel):
     must_be_open_source: bool = False
     existing_tools: list[str] = []
     compliance_requirements: list[str] = []
+    git_init: bool = Field(False, description="Initialize a git repository in the artifact directory after generation")
 
 
 class JobResponse(BaseModel):
@@ -312,6 +313,20 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
                         serialized["artifact_count"] = len(all_files)
                     except Exception as exc:
                         _log.warning("artifact_save_failed job=%s error=%s", job_id, exc)
+
+                # Optional git initialization
+                if req.git_init or os.getenv("DATASPHERE_GIT_INIT", "").lower() == "true":
+                    try:
+                        from datasphere.api.git_integration import init_git_repo
+                        artifact_dir = getattr(artifact_store, "_base", None)
+                        if artifact_dir is not None:
+                            job_dir = Path(artifact_dir) / job_id
+                            if job_dir.exists():
+                                git_result = init_git_repo(job_dir, job_id, req.business_request or "")
+                                serialized["git"] = git_result
+                                _log.info("git_init job=%s result=%s", job_id, git_result)
+                    except Exception as exc:
+                        _log.warning("git_init_failed job=%s error=%s", job_id, exc)
 
                 job_store.update(job_id, status="completed", result=serialized)
                 metrics.record_job_completed(mode=req.mode, duration_s=time.time() - job_start)
@@ -1472,6 +1487,53 @@ Utilise les modules Terraform officiels des providers cloud.
             "files":      project.files,
         }
 
+    @app.post(
+        "/terraform/plan",
+        tags=["generators"],
+        summary="Terraform dry-run (plan)",
+        description="""
+Génère un projet Terraform et exécute `terraform init` + `terraform plan` dans un répertoire temporaire.
+
+Retourne à la fois le code Terraform généré et la sortie du plan Terraform.
+Si Terraform n'est pas installé, retourne `dry_run.terraform_available: false` avec un message d'erreur.
+        """,
+    )
+    def terraform_plan_endpoint(req: DagGenerateRequest) -> dict:
+        """Generate Terraform IaC and run terraform plan (dry-run). Returns plan output."""
+        try:
+            from datasphere.generators.terraform import TerraformGenerator
+        except ImportError as exc:
+            raise HTTPException(status_code=503, detail=f"TerraformGenerator not available: {exc}")
+        from datasphere.api.terraform_runner import terraform_plan as run_terraform_plan
+        constraints = ArchitectureConstraints(
+            cloud_provider=req.cloud_provider,
+            data_warehouse=req.data_warehouse,
+            orchestrator=req.orchestrator,
+            ingestion=req.ingestion,
+            transformation=req.transformation,
+            bi_tool=req.bi_tool,
+            deployment=req.deployment,
+            security=req.security,
+            budget=req.budget,
+            data_lake=None,
+            catalog=None,
+            quality=req.quality,
+            processing_mode=req.processing_mode,
+        )
+        gen = TerraformGenerator()
+        project = gen.generate(req.business_request, constraints)
+        generated = {
+            "provider":   req.cloud_provider,
+            "warehouse":  req.data_warehouse,
+            "file_count": len(project.files),
+            "files":      project.files,
+        }
+        plan = run_terraform_plan(project.files)
+        return {
+            "generated": generated,
+            "dry_run":   plan,
+        }
+
     # ------------------------------------------------------------------
     # Lineage diagram generation
     # ------------------------------------------------------------------
@@ -1640,6 +1702,48 @@ Les prix sont basés sur les tarifs publics des fournisseurs cloud (mis à jour 
             ],
             "savings_tips": breakdown.savings_tips,
             "comparison":   breakdown.comparison,
+        }
+
+    # ------------------------------------------------------------------
+    # Cost optimization
+    # ------------------------------------------------------------------
+
+    @app.post("/costs/optimize", tags=["analysis"])
+    def optimize_costs(req: CostEstimateRequest) -> dict:
+        """AI-powered cost optimization: Reserved Instances, Savings Plans, rightsizing."""
+        from datasphere.agents.cost_tables import CostCalculator
+        from datasphere.agents.cost_optimizer import CostOptimizer
+
+        # First get cost breakdown
+        calculator = CostCalculator()
+        breakdown = calculator.calculate(req.stack, req.budget)
+
+        # Build per-component cost map
+        monthly_costs = {item.component: item.monthly_usd for item in breakdown.line_items}
+
+        # Run optimizer
+        optimizer = CostOptimizer()
+        report = optimizer.analyze(req.stack.dict() if hasattr(req.stack, 'dict') else req.stack, monthly_costs)
+
+        return {
+            "current_monthly_usd": report.total_current_monthly_usd,
+            "optimized_monthly_usd": report.total_optimized_monthly_usd,
+            "annual_savings_usd": report.total_annual_savings_usd,
+            "optimization_score": report.optimization_score,
+            "reserved_instance_recommendations": [
+                {
+                    "component": r.component, "tool": r.current_tool,
+                    "term": r.commitment_term, "savings_pct": r.savings_pct,
+                    "current_monthly_usd": r.current_monthly_usd,
+                    "reserved_monthly_usd": r.reserved_monthly_usd,
+                    "annual_savings_usd": r.annual_savings_usd,
+                    "recommendation": r.recommendation,
+                }
+                for r in report.reserved_instance_recommendations
+            ],
+            "quick_wins": report.quick_wins,
+            "medium_term": report.medium_term,
+            "long_term": report.long_term,
         }
 
     # ------------------------------------------------------------------
