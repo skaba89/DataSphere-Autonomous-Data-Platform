@@ -36,6 +36,7 @@ from datasphere.api.tenancy import get_tenant_id, set_tenant_id, tenant_job_id, 
 from datasphere.api.webhooks import webhook_registry
 from datasphere.api.artifact_store import artifact_store
 from datasphere.api.metrics import metrics
+from datasphere.api.notifications import notification_service
 
 setup_logging()
 _log = get_logger(__name__)
