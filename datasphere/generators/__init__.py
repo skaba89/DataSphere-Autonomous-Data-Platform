@@ -5,5 +5,10 @@ from datasphere.generators.prefect_flow import PrefectFlowGenerator
 from datasphere.generators.terraform import TerraformGenerator
 from datasphere.generators.lineage import LineageGenerator
 from datasphere.generators.stack_diff import StackDiffGenerator
+from datasphere.generators.templates import StackTemplate, TemplateRegistry, template_registry
 
-__all__ = ["DbtProjectGenerator", "AirflowDagGenerator", "DagsterJobGenerator", "PrefectFlowGenerator", "TerraformGenerator", "LineageGenerator", "StackDiffGenerator"]
+__all__ = [
+    "DbtProjectGenerator", "AirflowDagGenerator", "DagsterJobGenerator",
+    "PrefectFlowGenerator", "TerraformGenerator", "LineageGenerator", "StackDiffGenerator",
+    "StackTemplate", "TemplateRegistry", "template_registry",
+]

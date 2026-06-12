@@ -1066,6 +1066,106 @@ def create_app() -> FastAPI:
         }
 
     # ------------------------------------------------------------------
+    # Stack templates
+    # ------------------------------------------------------------------
+
+    from datasphere.generators.templates import template_registry as _template_registry
+
+    class TemplateGenerateRequest(BaseModel):
+        template_id: str
+        business_request: str = Field(..., min_length=3, max_length=2000)
+        overrides: dict = Field(default_factory=dict)
+
+    @app.get("/templates", tags=["templates"])
+    def list_templates(category: str | None = None, budget: str | None = None) -> dict:
+        """List all predefined stack templates, optionally filtered by category or budget."""
+        templates = _template_registry.list_all()
+        if category:
+            templates = [t for t in templates if t.category == category]
+        if budget:
+            templates = [t for t in templates if t.constraints.get("budget") == budget]
+        return {
+            "count": len(templates),
+            "templates": [
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "description": t.description,
+                    "category": t.category,
+                    "complexity": t.complexity,
+                    "estimated_monthly_usd": t.estimated_monthly_usd,
+                    "time_to_deploy": t.time_to_deploy,
+                    "tags": t.tags,
+                    "pros": t.pros[:3],
+                    "cons": t.cons[:2],
+                    "use_cases": t.use_cases,
+                    "stack": t.constraints,
+                }
+                for t in templates
+            ],
+        }
+
+    @app.get("/templates/{template_id}", tags=["templates"])
+    def get_template(template_id: str) -> dict:
+        """Get a specific template by ID."""
+        t = _template_registry.get(template_id)
+        if not t:
+            raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+        return {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "category": t.category,
+            "complexity": t.complexity,
+            "estimated_monthly_usd": t.estimated_monthly_usd,
+            "time_to_deploy": t.time_to_deploy,
+            "constraints": t.constraints,
+            "tags": t.tags,
+            "pros": t.pros,
+            "cons": t.cons,
+            "use_cases": t.use_cases,
+        }
+
+    @app.post("/generate/from-template", response_model=JobResponse, tags=["generation"])
+    async def generate_from_template(
+        req: TemplateGenerateRequest,
+        background_tasks: BackgroundTasks,
+        _: None = Depends(require_auth),
+    ) -> JobResponse:
+        """Generate architecture from a predefined template with optional overrides."""
+        t = _template_registry.get(req.template_id)
+        if not t:
+            raise HTTPException(status_code=404, detail=f"Template '{req.template_id}' not found")
+
+        constraints = {**t.constraints, **req.overrides}
+
+        # Map template constraint keys to GenerateRequest field names
+        _field_map = {
+            "cloud": "cloud_provider",
+            "warehouse": "data_warehouse",
+        }
+        mapped: dict = {}
+        for k, v in constraints.items():
+            mapped_key = _field_map.get(k, k)
+            if mapped_key in GenerateRequest.model_fields:
+                mapped[mapped_key] = v
+
+        generate_req = GenerateRequest(
+            mode="explicit",
+            business_request=req.business_request,
+            **mapped,
+        )
+
+        job_id = str(uuid.uuid4())
+        job_store.create(job_id, status="pending", meta={"template_id": req.template_id})
+        background_tasks.add_task(_run_generation, job_id, generate_req)
+        return JobResponse(
+            job_id=job_id,
+            status="pending",
+            message=f"Génération depuis template {req.template_id} lancée",
+        )
+
+    # ------------------------------------------------------------------
     # Supported stacks catalog
     # ------------------------------------------------------------------
 
