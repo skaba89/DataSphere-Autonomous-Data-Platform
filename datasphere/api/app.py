@@ -2056,6 +2056,64 @@ Le job est lancé en arrière-plan — suivez l'avancement via `GET /jobs/{job_i
             "external_count": sum(1 for p in plugins if p.source == "plugin"),
         }
 
+    # ---------------------------------------------------------------------------
+    # Plugin Marketplace
+    # ---------------------------------------------------------------------------
+
+    @app.get("/marketplace", tags=["marketplace"])
+    def marketplace_list(
+        q: str = Query("", description="Search query (name, description, tags)"),
+        category: Optional[str] = Query(None, description="Filter by category"),
+        installed_only: bool = Query(False, description="Only show installed plugins"),
+    ) -> dict:
+        """Browse the DataSphere plugin marketplace."""
+        from datasphere.marketplace import marketplace
+        plugins = marketplace.search(q, category, installed_only)
+        return {
+            "count": len(plugins),
+            "plugins": [p.to_dict() for p in plugins],
+            "categories": marketplace.categories(),
+        }
+
+    @app.get("/marketplace/{plugin_name}", tags=["marketplace"])
+    def marketplace_get(plugin_name: str) -> dict:
+        """Get details for a specific marketplace plugin."""
+        from datasphere.marketplace import marketplace
+        plugin = marketplace.get(plugin_name)
+        if not plugin:
+            raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found in marketplace")
+        return plugin.to_dict()
+
+    @app.post("/marketplace/{plugin_name}/install", tags=["marketplace"])
+    def marketplace_install(
+        plugin_name: str,
+        upgrade: bool = Query(False, description="Upgrade if already installed"),
+        _: None = Depends(require_auth),
+    ) -> dict:
+        """Install a marketplace plugin via pip. Requires DATASPHERE_ALLOW_PLUGIN_INSTALL=true."""
+        from datasphere.marketplace import marketplace
+        plugin = marketplace.get(plugin_name)
+        if not plugin:
+            raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found in marketplace")
+        result = marketplace.install(plugin.pypi_package, upgrade=upgrade)
+        if result["success"]:
+            plugin_registry.load()
+        return {**result, "plugin": plugin_name, "package": plugin.pypi_package}
+
+    @app.delete("/marketplace/{plugin_name}/install", tags=["marketplace"])
+    def marketplace_uninstall(
+        plugin_name: str,
+        _: None = Depends(require_auth),
+    ) -> dict:
+        """Uninstall a marketplace plugin. Requires DATASPHERE_ALLOW_PLUGIN_INSTALL=true."""
+        from datasphere.marketplace import marketplace
+        plugin = marketplace.get(plugin_name)
+        if not plugin:
+            raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found in marketplace")
+        result = marketplace.uninstall(plugin.pypi_package)
+        return {**result, "plugin": plugin_name, "package": plugin.pypi_package}
+
+
     @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
     def prometheus_metrics() -> PlainTextResponse:
         """

@@ -101,6 +101,7 @@ docker run -p 8000:8000 datasphere:dev
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/costs/estimate` | Estimate infrastructure costs |
+| POST | `/costs/optimize` | AI-powered RI / Savings Plans recommendations |
 | POST | `/stacks/diff` | Diff two stack configurations |
 
 ### Templates
