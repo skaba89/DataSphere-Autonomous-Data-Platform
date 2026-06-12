@@ -14,7 +14,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
