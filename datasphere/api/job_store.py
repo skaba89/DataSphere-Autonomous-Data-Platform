@@ -54,11 +54,15 @@ class _InMemoryStore:
         with self._lock:
             return dict(self._data[job_id]) if job_id in self._data else None
 
-    def list_all(self) -> list[dict]:
+    def list_all(self, status: str | None = None, limit: int = 200, offset: int = 0) -> list[dict]:
         with self._lock:
+            items = sorted(self._data.values(), key=lambda x: x["created_at"], reverse=True)
+            if status:
+                items = [v for v in items if v["status"] == status]
+            paged = items[offset: offset + limit]
             return [
                 {"job_id": v["job_id"], "status": v["status"], "created_at": v["created_at"]}
-                for v in sorted(self._data.values(), key=lambda x: x["created_at"], reverse=True)
+                for v in paged
             ]
 
     def delete(self, job_id: str) -> None:
@@ -134,11 +138,18 @@ class SQLiteJobStore:
             d["meta"]   = json.loads(d["meta"]) if d["meta"] else {}
             return d
 
-    def list_all(self) -> list[dict]:
+    def list_all(self, status: str | None = None, limit: int = 200, offset: int = 0) -> list[dict]:
         with self._lock, self._conn() as conn:
-            rows = conn.execute(
-                "SELECT job_id, status, created_at FROM jobs ORDER BY created_at DESC LIMIT 200"
-            ).fetchall()
+            if status:
+                rows = conn.execute(
+                    "SELECT job_id, status, created_at FROM jobs WHERE status=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (status, limit, offset),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT job_id, status, created_at FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
+                ).fetchall()
             return [dict(r) for r in rows]
 
     def delete(self, job_id: str) -> None:

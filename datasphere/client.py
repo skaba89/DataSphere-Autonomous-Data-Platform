@@ -396,15 +396,18 @@ class DataSphereClient:
             fh.write(raw)  # type: ignore[arg-type]
         return dest
 
-    def list_jobs(self) -> list[dict]:
-        """GET /jobs — list all jobs."""
-        result = self._get("/jobs")
-        if isinstance(result, list):
-            return result
-        # API may wrap in {"jobs": [...]}
+    def list_jobs(self, limit: int = 50, offset: int = 0, status: str | None = None) -> dict:
+        """GET /jobs — list jobs with pagination. Returns dict with items, total, has_more."""
+        params = f"?limit={limit}&offset={offset}"
+        if status:
+            params += f"&status={status}"
+        result = self._get(f"/jobs{params}")
         if isinstance(result, dict):
-            return result.get("jobs", result.get("items", []))
-        return []
+            return result
+        # Legacy fallback: if API returned a bare list, wrap it
+        if isinstance(result, list):
+            return {"items": result, "total": len(result), "limit": limit, "offset": offset, "has_more": False}
+        return {"items": [], "total": 0, "limit": limit, "offset": offset, "has_more": False}
 
 
 # ---------------------------------------------------------------------------

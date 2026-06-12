@@ -14,7 +14,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
@@ -48,6 +48,7 @@ from datasphere.api.webhooks import webhook_registry
 from datasphere.api.artifact_store import artifact_store
 from datasphere.api.metrics import metrics
 from datasphere.api.notifications import notification_service
+from datasphere.api.cache import cache, MISSING as _CACHE_MISSING
 
 setup_logging()
 _log = get_logger(__name__)
@@ -526,8 +527,13 @@ GET /generate/stream?job_id=<id> → EventSource
                 and path not in _system_paths
                 and not path.startswith("/ui")):
             response.headers["Deprecation"] = "true"
-            # Build successor link — strip leading slash for formatting
-            response.headers["Link"] = f'</v1{path}>; rel="successor-version"'
+            # Build successor link — append to any existing Link header (e.g. pagination)
+            successor_link = f'</v1{path}>; rel="successor-version"'
+            existing_link = response.headers.get("Link", "")
+            if existing_link:
+                response.headers["Link"] = f"{existing_link}, {successor_link}"
+            else:
+                response.headers["Link"] = successor_link
         _log.info(
             "http_request",
             extra={
@@ -829,14 +835,54 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
         )
 
     @app.get("/jobs", tags=["generation"])
-    def list_jobs() -> list[dict]:
-        """Liste tous les jobs filtrés par tenant courant."""
+    def list_jobs(
+        limit: int = Query(default=50, ge=1, le=200, description="Items per page"),
+        offset: int = Query(default=0, ge=0, description="Skip N items"),
+        status: str | None = Query(default=None, description="Filter by status: pending|running|completed|failed"),
+    ) -> JSONResponse:
+        """Liste les jobs avec pagination et filtrage optionnel par statut."""
         all_jobs = job_store.list_all()
         tenant = get_tenant_id()
         if tenant != "default":
             prefix = f"{tenant}:"
-            return [j for j in all_jobs if j["job_id"].startswith(prefix)]
-        return [j for j in all_jobs if ":" not in j["job_id"]]
+            all_jobs = [j for j in all_jobs if j["job_id"].startswith(prefix)]
+        else:
+            all_jobs = [j for j in all_jobs if ":" not in j["job_id"]]
+
+        if status:
+            all_jobs = [j for j in all_jobs if j.get("status") == status]
+
+        total = len(all_jobs)
+        page = all_jobs[offset: offset + limit]
+        has_more = (offset + limit) < total
+
+        headers: dict[str, str] = {}
+        link_parts: list[str] = []
+        if has_more:
+            next_url = f"/jobs?limit={limit}&offset={offset + limit}"
+            if status:
+                next_url += f"&status={status}"
+            link_parts.append(f'<{next_url}>; rel="next"')
+        if offset > 0:
+            prev_offset = max(0, offset - limit)
+            prev_url = f"/jobs?limit={limit}&offset={prev_offset}"
+            if status:
+                prev_url += f"&status={status}"
+            link_parts.append(f'<{prev_url}>; rel="prev"')
+        if link_parts:
+            headers["Link"] = ", ".join(link_parts)
+
+        return JSONResponse(
+            content={
+                "items": page,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+                "next_offset": offset + limit if has_more else None,
+            },
+            headers=headers,
+        )
 
     @app.delete("/jobs/{job_id}", tags=["generation"])
     def delete_job(job_id: str) -> dict:
@@ -913,10 +959,38 @@ Pour la production, utilisez `POST /generate` (async) + `GET /generate/stream` (
         )
 
     @app.get("/artifacts/{job_id}", tags=["artifacts"])
-    def list_artifacts(job_id: str) -> dict:
-        """List all stored artifacts for a job."""
-        files = artifact_store.list_files(job_id)
-        return {"job_id": job_id, "files": files, "count": len(files)}
+    def list_artifacts(
+        job_id: str,
+        limit: int = Query(default=100, ge=1, le=500),
+        offset: int = Query(default=0, ge=0),
+    ) -> JSONResponse:
+        """List stored artifacts for a job with pagination."""
+        all_files = artifact_store.list_files(job_id)
+        total = len(all_files)
+        page = all_files[offset: offset + limit]
+        has_more = (offset + limit) < total
+
+        headers: dict[str, str] = {}
+        link_parts: list[str] = []
+        if has_more:
+            link_parts.append(f'</artifacts/{job_id}?limit={limit}&offset={offset + limit}>; rel="next"')
+        if offset > 0:
+            prev_offset = max(0, offset - limit)
+            link_parts.append(f'</artifacts/{job_id}?limit={limit}&offset={prev_offset}>; rel="prev"')
+        if link_parts:
+            headers["Link"] = ", ".join(link_parts)
+
+        return JSONResponse(
+            content={
+                "job_id": job_id,
+                "files": page,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+            },
+            headers=headers,
+        )
 
     @app.get("/artifacts/{job_id}/{filename:path}", tags=["artifacts"])
     def get_artifact(job_id: str, filename: str) -> Response:
@@ -1636,12 +1710,18 @@ Utilisez `POST /generate/from-template` pour lancer une génération depuis un t
     )
     def list_templates(category: str | None = None, budget: str | None = None) -> dict:
         """List all predefined stack templates, optionally filtered by category or budget."""
+        # Only cache the unfiltered list (filters are rare; caching all combos isn't worth it)
+        if not category and not budget:
+            cached = cache.get("templates:list")
+            if cached is not _CACHE_MISSING:
+                return cached
+
         templates = _template_registry.list_all()
         if category:
             templates = [t for t in templates if t.category == category]
         if budget:
             templates = [t for t in templates if t.constraints.get("budget") == budget]
-        return {
+        result = {
             "count": len(templates),
             "templates": [
                 {
@@ -1661,6 +1741,9 @@ Utilisez `POST /generate/from-template` pour lancer une génération depuis un t
                 for t in templates
             ],
         }
+        if not category and not budget:
+            cache.set("templates:list", result, 300)
+        return result
 
     @app.get("/templates/{template_id}", tags=["templates"])
     def get_template(template_id: str) -> dict:

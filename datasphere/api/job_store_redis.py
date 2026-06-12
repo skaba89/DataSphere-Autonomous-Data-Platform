@@ -83,15 +83,17 @@ class RedisJobStore:
                 record["meta"] = {}
         return record
 
-    def list_all(self) -> list[dict]:
-        # Get most recent 200 job IDs from sorted set
-        job_ids = self._client.zrevrange(self._index_key(), 0, 199)
+    def list_all(self, status: str | None = None, limit: int = 200, offset: int = 0) -> list[dict]:
+        # Get all job IDs from sorted set (newest first), then filter/page in Python
+        job_ids = self._client.zrevrange(self._index_key(), 0, -1)
         results = []
         for job_id in job_ids:
             rec = self.get(job_id)
             if rec:
+                if status and rec.get("status") != status:
+                    continue
                 results.append(rec)
-        return results
+        return results[offset: offset + limit]
 
     def delete(self, job_id: str) -> None:
         pipe = self._client.pipeline()
