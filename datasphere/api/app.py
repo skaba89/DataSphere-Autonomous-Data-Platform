@@ -438,6 +438,17 @@ def create_app() -> FastAPI:
         response.headers["X-Request-ID"] = req_id
         response.headers["X-Response-Time"] = f"{duration_ms}ms"
         response.headers["X-Tenant-ID"] = tenant_id
+        response.headers["X-API-Version"] = "1"
+        # Add deprecation headers for unversioned routes (not /v1, not system/ui paths)
+        _system_paths = {"/healthz", "/readyz", "/health", "/metrics", "/ui", "/ui/",
+                         "/docs", "/redoc", "/openapi.json", "/"}
+        path = request.url.path
+        if (not path.startswith("/v1")
+                and path not in _system_paths
+                and not path.startswith("/ui")):
+            response.headers["Deprecation"] = "true"
+            # Build successor link — strip leading slash for formatting
+            response.headers["Link"] = f'</v1{path}>; rel="successor-version"'
         _log.info(
             "http_request",
             extra={
@@ -515,24 +526,30 @@ def create_app() -> FastAPI:
         return {
             "name": "DataSphere Autonomous Data Platform",
             "version": _VERSION,
+            "api_versions": {
+                "v1": "/v1",
+                "current": "v1",
+                "deprecated": ["unversioned (no /v1 prefix)"],
+            },
             "ui":   "/ui",
             "docs": "/docs",
             "health": "/health",
             "endpoints": [
                 "GET  /ui  → Interface web",
-                "POST /generate",
-                "GET  /generate/stream?job_id=<id>",
-                "GET  /healthz  /readyz",
-                "GET  /jobs/{job_id}",
-                "POST /proposals",
-                "POST /dbt/generate",
-                "POST /dags/airflow/generate",
-                "POST /dagster/generate",
-                "POST /prefect/generate",
-                "POST /terraform/generate",
-                "GET  /stacks/supported",
+                "POST /v1/generate",
+                "GET  /v1/generate/stream?job_id=<id>",
+                "GET  /v1/healthz  /v1/readyz",
+                "GET  /v1/jobs/{job_id}",
+                "POST /v1/proposals",
+                "POST /v1/dbt/generate",
+                "POST /v1/dags/airflow/generate",
+                "POST /v1/dagster/generate",
+                "POST /v1/prefect/generate",
+                "POST /v1/terraform/generate",
+                "GET  /v1/stacks/supported",
                 "Multi-tenant: set X-Tenant-ID header to isolate jobs per tenant",
-                "GET  /metrics  → Prometheus metrics",
+                "GET  /v1/metrics  → Prometheus metrics",
+                "NOTE: Unversioned routes (without /v1) are deprecated and return Deprecation: true header",
             ],
         }
 
@@ -1079,6 +1096,31 @@ def create_app() -> FastAPI:
         return PlainTextResponse(
             content=metrics.render(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
+
+    # ------------------------------------------------------------------
+    # API versioning: register all existing routes under /v1/ prefix
+    # ------------------------------------------------------------------
+    from fastapi.routing import APIRoute as _APIRoute
+
+    _skip_paths = {"/docs", "/redoc", "/openapi.json", "/", "/ui", "/ui/"}
+
+    for _route in list(app.routes):
+        if not isinstance(_route, _APIRoute):
+            continue
+        if _route.path.startswith("/v1"):
+            continue
+        if _route.path in _skip_paths:
+            continue
+        app.add_api_route(
+            f"/v1{_route.path}",
+            _route.endpoint,
+            methods=list(_route.methods or ["GET"]),
+            tags=[f"v1/{t}" for t in (_route.tags or [])],
+            summary=_route.summary,
+            description=_route.description,
+            response_model=_route.response_model,
+            include_in_schema=True,
         )
 
     return app

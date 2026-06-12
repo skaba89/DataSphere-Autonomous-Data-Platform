@@ -68,10 +68,12 @@ class DataSphereClient:
         base_url: str,
         api_key: str | None = None,
         timeout: int = 120,
+        api_version: str = "v1",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self._version_prefix = f"/{api_version}" if api_version else ""
 
     # ------------------------------------------------------------------
     # Private HTTP helpers
@@ -84,7 +86,7 @@ class DataSphereClient:
         return h
 
     def _post(self, path: str, payload: dict) -> dict:
-        url = f"{self.base_url}{path}"
+        url = f"{self.base_url}{self._version_prefix}{path}"
         body = json.dumps(payload).encode()
         if _HTTPX_AVAILABLE:
             with _httpx.Client(timeout=self.timeout) as c:
@@ -105,7 +107,7 @@ class DataSphereClient:
                 ) from exc
 
     def _get(self, path: str) -> dict | bytes:
-        url = f"{self.base_url}{path}"
+        url = f"{self.base_url}{self._version_prefix}{path}"
         if _HTTPX_AVAILABLE:
             with _httpx.Client(timeout=self.timeout) as c:
                 resp = c.get(url, headers=self._headers())
