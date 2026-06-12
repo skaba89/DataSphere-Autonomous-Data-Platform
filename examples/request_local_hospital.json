@@ -1,0 +1,19 @@
+{
+  "business_request": "Analyse les données hospitalières",
+  "architecture_constraints": {
+    "cloud_provider": "local-docker",
+    "data_warehouse": "postgresql",
+    "orchestrator": "dagster",
+    "ingestion": "meltano",
+    "transformation": "SQLMesh",
+    "data_lake": "MinIO",
+    "bi_tool": "metabase",
+    "catalog": "DataHub",
+    "quality": "Soda Core",
+    "deployment": "Docker Compose",
+    "security": ["JWT", "RBAC"],
+    "budget": "low",
+    "data_volume": "medium",
+    "processing_mode": "batch"
+  }
+}

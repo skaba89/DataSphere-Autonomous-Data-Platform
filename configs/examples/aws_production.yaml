@@ -1,0 +1,69 @@
+platform:
+  name: "aws-production"
+  environment: "production"
+  version: "1.0.0"
+
+cloud:
+  provider: "aws"
+  extra:
+    region: "eu-west-1"
+    account_id: "${AWS_ACCOUNT_ID}"
+
+warehouse:
+  type: "redshift"
+  host: "${REDSHIFT_HOST}"
+  port: 5439
+  database: "datasphere"
+  username: "${REDSHIFT_USER}"
+  password: "${REDSHIFT_PASSWORD}"
+  extra:
+    cluster_identifier: "${REDSHIFT_CLUSTER}"
+
+orchestration:
+  type: "airflow"
+  extra:
+    executor: "CeleryExecutor"
+    deployment: "mwaa"
+
+ingestion:
+  type: "airbyte"
+
+transformation:
+  type: "dbt"
+  extra:
+    target: "redshift"
+
+storage:
+  type: "s3"
+  extra:
+    region: "eu-west-1"
+    bucket: "${S3_BUCKET}"
+
+bi:
+  type: "superset"
+
+quality:
+  type: "great-expectations"
+
+catalog:
+  type: "datahub"
+
+ai:
+  type: "openai"
+  password: "${OPENAI_API_KEY}"
+
+vector:
+  type: "qdrant"
+
+infrastructure:
+  type: "terraform"
+  extra:
+    module: "infra/terraform/modules/aws"
+
+monitoring:
+  type: "prometheus"
+
+security:
+  type: "vault"
+  extra:
+    deployment: "hcp-vault"

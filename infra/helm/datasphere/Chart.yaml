@@ -1,0 +1,17 @@
+apiVersion: v2
+name: datasphere
+description: DataSphere Autonomous Data Platform — stack-agnostic data architecture generator
+type: application
+version: 1.2.0
+appVersion: "1.2.0"
+keywords:
+  - data-platform
+  - data-warehouse
+  - analytics
+  - mlops
+  - infrastructure-as-code
+maintainers:
+  - name: DataSphere Team
+home: https://github.com/skaba89/datasphere-autonomous-data-platform
+sources:
+  - https://github.com/skaba89/datasphere-autonomous-data-platform

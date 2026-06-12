@@ -1,0 +1,18 @@
+{
+  "mode": "explicit",
+  "business_request": "Analyse les données hospitalières",
+  "cloud_provider": "local-docker",
+  "data_warehouse": "postgresql",
+  "orchestrator": "dagster",
+  "ingestion": "meltano",
+  "transformation": "sqlmesh",
+  "data_lake": "minio",
+  "bi_tool": "metabase",
+  "catalog": "datahub",
+  "quality": "soda-core",
+  "deployment": "docker-compose",
+  "security": ["JWT", "RBAC"],
+  "budget": "low",
+  "data_volume": "medium",
+  "processing_mode": "batch"
+}

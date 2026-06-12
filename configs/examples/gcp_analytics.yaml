@@ -1,0 +1,64 @@
+platform:
+  name: "gcp-analytics"
+  environment: "production"
+  version: "1.0.0"
+
+cloud:
+  provider: "gcp"
+  extra:
+    project: "${GCP_PROJECT}"
+    region: "europe-west1"
+
+warehouse:
+  type: "bigquery"
+  extra:
+    project: "${GCP_PROJECT}"
+    dataset: "datasphere"
+    location: "EU"
+
+orchestration:
+  type: "prefect"
+
+ingestion:
+  type: "airbyte"
+
+transformation:
+  type: "dbt"
+  extra:
+    target: "bigquery"
+
+storage:
+  type: "gcs"
+  extra:
+    project: "${GCP_PROJECT}"
+    bucket: "${GCS_BUCKET}"
+
+bi:
+  type: "superset"
+
+quality:
+  type: "great-expectations"
+
+catalog:
+  type: "datahub"
+
+ai:
+  type: "anthropic"
+  password: "${ANTHROPIC_API_KEY}"
+
+vector:
+  type: "pgvector"
+
+infrastructure:
+  type: "terraform"
+  extra:
+    module: "infra/terraform/modules/gcp"
+
+monitoring:
+  type: "opentelemetry"
+
+security:
+  type: "secret-manager"
+  extra:
+    provider: "gcp"
+    project: "${GCP_PROJECT}"

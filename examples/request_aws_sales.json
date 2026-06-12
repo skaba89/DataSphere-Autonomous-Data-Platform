@@ -1,0 +1,21 @@
+{
+  "business_request": "Analyse les ventes, paiements et impayés par agence",
+  "architecture_constraints": {
+    "cloud_provider": "aws",
+    "data_warehouse": "snowflake",
+    "orchestrator": "airflow",
+    "ingestion": "airbyte",
+    "transformation": "dbt Core",
+    "data_lake": "S3",
+    "bi_tool": "superset",
+    "catalog": "openmetadata",
+    "quality": "great-expectations",
+    "deployment": "kubernetes",
+    "iac": "terraform",
+    "security": ["RBAC", "Vault", "RLS"],
+    "budget": "enterprise",
+    "data_volume": "large",
+    "processing_mode": "batch",
+    "region": "eu-west-1"
+  }
+}

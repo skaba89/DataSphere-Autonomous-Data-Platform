@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["prometheus"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["grafana"]
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD required}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    profiles: ["loki"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:

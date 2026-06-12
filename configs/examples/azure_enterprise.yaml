@@ -1,0 +1,66 @@
+platform:
+  name: "azure-enterprise"
+  environment: "production"
+  version: "1.0.0"
+
+cloud:
+  provider: "azure"
+  extra:
+    subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+    tenant_id: "${AZURE_TENANT_ID}"
+    resource_group: "${AZURE_RESOURCE_GROUP}"
+
+warehouse:
+  type: "azure-synapse"
+  host: "${SYNAPSE_HOST}"
+  port: 1433
+  database: "${SYNAPSE_DB}"
+  username: "${SYNAPSE_USER}"
+  password: "${SYNAPSE_PASSWORD}"
+
+orchestration:
+  type: "dagster"
+
+ingestion:
+  type: "meltano"
+
+transformation:
+  type: "dbt"
+  extra:
+    target: "synapse"
+
+storage:
+  type: "adls"
+  extra:
+    account_name: "${ADLS_ACCOUNT}"
+    container: "${ADLS_CONTAINER}"
+
+bi:
+  type: "powerbi"
+
+quality:
+  type: "soda-core"
+
+catalog:
+  type: "openmetadata"
+
+ai:
+  type: "azure-openai"
+  extra:
+    endpoint: "${AZURE_OPENAI_ENDPOINT}"
+    deployment: "${AZURE_OPENAI_DEPLOYMENT}"
+  password: "${AZURE_OPENAI_KEY}"
+
+vector:
+  type: "weaviate"
+
+infrastructure:
+  type: "terraform"
+  extra:
+    module: "infra/terraform/modules/azure"
+
+monitoring:
+  type: "opentelemetry"
+
+security:
+  type: "keycloak"

@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataSphere — Autonomous Data Platform</title>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #6366f1;
+      --accent2:  #22d3ee;
+      --success:  #22c55e;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --radius:   10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ---- Nav ---- */
+    nav {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 1.3rem; font-weight: 700; color: var(--accent2); letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .nav-badge {
+      font-size: 0.65rem; background: var(--accent); color: #fff;
+      padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    }
+    .nav-links { margin-left: auto; display: flex; gap: 20px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.9rem; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ---- Layout ---- */
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ---- Hero ---- */
+    .hero { text-align: center; padding: 48px 0 32px; }
+    .hero h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.1; margin-bottom: 14px; }
+    .hero h1 em { font-style: normal; color: var(--accent2); }
+    .hero p { color: var(--muted); font-size: 1.1rem; max-width: 560px; margin: 0 auto 28px; }
+    .hero-badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .badge {
+      font-size: 0.75rem; padding: 4px 12px;
+      border: 1px solid var(--border); border-radius: 20px; color: var(--muted);
+    }
+
+    /* ---- Tabs ---- */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+    .tab {
+      padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+      color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .tab.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .tab:hover:not(.active) { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 18px; color: var(--text); }
+
+    /* ---- Grid ---- */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 768px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    /* ---- Forms ---- */
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 9px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 0.9rem; transition: border .2s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 80px; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      padding: 10px 22px; border: none; border-radius: 7px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all .2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #3a3d50; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+    .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ---- Mode toggle ---- */
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 24px; }
+    .mode-btn {
+      flex: 1; padding: 14px; border: 2px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); color: var(--muted); cursor: pointer; text-align: center;
+      transition: all .2s; font-size: 0.9rem;
+    }
+    .mode-btn.active { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.1); }
+    .mode-btn h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+    .mode-btn p { font-size: 0.78rem; }
+
+    /* ---- Result area ---- */
+    .result-box {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; margin-top: 20px; display: none;
+    }
+    .result-box.visible { display: block; }
+    .result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+    .status-dot.pending { background: var(--warning); animation: pulse 1s infinite; }
+    .status-dot.error { background: var(--danger); }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* ---- Stack grid ---- */
+    .stack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .stack-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px; transition: border-color .2s;
+    }
+    .stack-card:hover { border-color: var(--accent); }
+    .stack-card .layer { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .stack-card .tool { font-size: 0.95rem; font-weight: 600; margin-top: 4px; color: var(--accent2); }
+
+    /* ---- Proposal cards ---- */
+    .proposal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .proposal-card {
+      background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius);
+      padding: 20px; cursor: pointer; transition: all .2s;
+    }
+    .proposal-card:hover, .proposal-card.selected { border-color: var(--accent); }
+    .proposal-card.selected { background: rgba(99,102,241,.08); }
+    .proposal-name { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+    .proposal-tagline { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+    .proposal-cost { font-size: 1.2rem; font-weight: 700; color: var(--accent2); }
+    .proposal-meta { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .tag {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+      background: rgba(255,255,255,.07); color: var(--muted);
+    }
+    .tag.complexity-low { color: var(--success); }
+    .tag.complexity-medium { color: var(--warning); }
+    .tag.complexity-high { color: var(--danger); }
+
+    /* ---- Artifacts ---- */
+    .artifact-list { list-style: none; }
+    .artifact-list li {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+    }
+    .artifact-list li:last-child { border-bottom: none; }
+    .artifact-icon { font-size: 1rem; }
+
+    /* ---- Agent results ---- */
+    .agent-result { margin-bottom: 16px; }
+    .agent-title { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .agent-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .cost-big { font-size: 2rem; font-weight: 800; color: var(--accent2); }
+    .warning-list { list-style: none; }
+    .warning-list li { padding: 5px 0; font-size: 0.83rem; color: var(--warning); }
+    .warning-list li::before { content: "⚠ "; }
+
+    /* ---- Loader ---- */
+    .loader { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Toast ---- */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.88rem; display: none; z-index: 9999; max-width: 360px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    }
+    #toast.success { border-color: var(--success); }
+    #toast.error   { border-color: var(--danger); }
+
+    /* ---- Misc ---- */
+    .section-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 20px; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+    .text-muted { color: var(--muted); font-size: 0.85rem; }
+    .text-success { color: var(--success); }
+    .text-danger  { color: var(--danger); }
+    pre { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; overflow-x: auto; }
+    code { background: rgba(255,255,255,.05); padding: 2px 6px; border-radius: 4px; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="logo">Data<span>Sphere</span></div>
+  <span class="nav-badge">v1.2</span>
+  <span id="health-badge" style="font-size:0.72rem;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);">● checking…</span>
+  <div class="nav-links">
+    <a href="/docs" target="_blank">API Docs</a>
+    <a href="https://github.com/skaba89/datasphere-autonomous-data-platform" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Génère ton architecture data<br><em>en quelques secondes</em></h1>
+    <p>Décris ton besoin, choisis tes outils ou laisse les agents recommander.<br>DataSphere génère tout : infra, dbt, DAGs, CI/CD, sécurité.</p>
+    <div class="hero-badges">
+      <span class="badge">☁ AWS / GCP / Azure</span>
+      <span class="badge">🐳 Local Docker</span>
+      <span class="badge">⎈ Kubernetes</span>
+      <span class="badge">72 adaptateurs</span>
+      <span class="badge">Stack-agnostic</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('generate')">🚀 Générer</button>
+    <button class="tab" onclick="switchTab('proposals')">💡 Propositions</button>
+    <button class="tab" onclick="switchTab('generators')">🔧 dbt / DAGs</button>
+    <button class="tab" onclick="switchTab('catalog')">📦 Catalogue</button>
+    <button class="tab" onclick="switchTab('jobs')">📋 Historique</button>
+    <button class="tab" onclick="switchTab('templates')">📋 Templates</button>
+  </div>
+
+  <!-- ================================================================
+       TAB: GENERATE
+  ================================================================ -->
+  <div id="tab-generate" class="tab-panel active">
+
+    <!-- Mode selector -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode-explicit-btn" onclick="selectMode('explicit')">
+        <h4>Mode 1 — Explicit</h4>
+        <p>Vous choisissez chaque outil</p>
+      </button>
+      <button class="mode-btn" id="mode-recommended-btn" onclick="selectMode('recommended')">
+        <h4>Mode 2 — Recommandé</h4>
+        <p>Les agents recommandent selon votre contexte</p>
+      </button>
+    </div>
+
+    <div class="grid-2" style="gap:24px; align-items: start;">
+
+      <!-- Form -->
+      <div class="card">
+        <div class="field">
+          <label>Besoin métier *</label>
+          <textarea id="business_request" placeholder="Ex: Analyse des ventes par agence et région, tableau de bord temps réel…" rows="3"></textarea>
+        </div>
+
+        <!-- MODE 1 FIELDS -->
+        <div id="mode1-fields">
+          <div class="grid-2">
+            <div class="field">
+              <label>Cloud Provider</label>
+              <select id="cloud_provider">
+                <option value="aws">AWS</option>
+                <option value="gcp">GCP</option>
+                <option value="azure">Azure</option>
+                <option value="local-docker">Local Docker</option>
+                <option value="kubernetes">Kubernetes</option>
+                <option value="on-premise">On-Premise</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Budget</label>
+              <select id="budget">
+                <option value="low">Low (< 500$/mois)</option>
+                <option value="medium" selected>Medium (500–5k$/mois)</option>
+                <option value="enterprise">Enterprise (5k+$/mois)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Data Warehouse</label>
+              <select id="data_warehouse">
+                <option value="snowflake">Snowflake</option>
+                <option value="bigquery">BigQuery</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="redshift">Redshift</option>
+                <option value="databricks">Databricks</option>
+                <option value="clickhouse">ClickHouse</option>
+                <option value="duckdb">DuckDB</option>
+                <option value="azure-synapse">Azure Synapse</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Orchestrateur</label>
+              <select id="orchestrator">
+                <option value="airflow">Airflow</option>
+                <option value="dagster">Dagster</option>
+                <option value="prefect">Prefect</option>
+                <option value="argo">Argo Workflows</option>
+                <option value="kestra">Kestra</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="fivetran">Fivetran</option>
+                <option value="kafka-connect">Kafka Connect</option>
+                <option value="debezium">Debezium</option>
+                <option value="nifi">NiFi</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Transformation</label>
+              <select id="transformation">
+                <option value="dbt">dbt Core</option>
+                <option value="spark">Apache Spark</option>
+                <option value="sqlmesh">SQLMesh</option>
+                <option value="flink">Apache Flink</option>
+                <option value="polars">Polars</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>BI Tool</label>
+              <select id="bi_tool">
+                <option value="superset">Apache Superset</option>
+                <option value="metabase">Metabase</option>
+                <option value="redash">Redash</option>
+                <option value="evidence">Evidence</option>
+                <option value="tableau">Tableau</option>
+                <option value="powerbi">Power BI</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Déploiement</label>
+              <select id="deployment">
+                <option value="kubernetes">Kubernetes / Helm</option>
+                <option value="docker-compose">Docker Compose</option>
+                <option value="terraform">Terraform</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODE 2 FIELDS -->
+        <div id="mode2-fields" style="display:none;">
+          <div class="grid-2">
+            <div class="field">
+              <label>Taille d'équipe</label>
+              <select id="team_size">
+                <option value="solo">Solo (1 pers.)</option>
+                <option value="small" selected>Petite (2–5)</option>
+                <option value="medium">Moyenne (5–20)</option>
+                <option value="large">Grande (20+)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Volume de données</label>
+              <select id="data_volume">
+                <option value="small">Small (< 10 GB/j)</option>
+                <option value="medium" selected>Medium (10–500 GB/j)</option>
+                <option value="large">Large (500 GB–5 TB/j)</option>
+                <option value="xlarge">XLarge (5+ TB/j)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Budget</label>
+              <select id="budget2">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Préférence cloud</label>
+              <select id="cloud_preference">
+                <option value="none">Aucune préférence</option>
+                <option value="aws">AWS</option>
+                <option value="gcp">GCP</option>
+                <option value="azure">Azure</option>
+                <option value="local-docker">Local / Open source</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mode de traitement</label>
+              <select id="processing_mode2">
+                <option value="batch" selected>Batch (quotidien)</option>
+                <option value="realtime">Temps réel (streaming)</option>
+                <option value="micro-batch">Micro-batch</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Niveau de sécurité</label>
+              <select id="security_level">
+                <option value="rbac" selected>RBAC standard</option>
+                <option value="rls">RBAC + RLS</option>
+                <option value="enterprise">Enterprise (Vault, chiffrement)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Open source uniquement ?</label>
+            <select id="must_be_open_source">
+              <option value="false" selected>Non</option>
+              <option value="true">Oui — pas de SaaS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Exigences de conformité (séparées par virgule)</label>
+            <input id="compliance_requirements" type="text" placeholder="HDS, RGPD, HIPAA, SOX, PCI-DSS…" />
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:8px;">
+          <button class="btn btn-primary" id="generate-btn" onclick="runGenerate()">⚡ Générer</button>
+          <button class="btn btn-secondary" onclick="resetForm()">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Result panel -->
+      <div>
+        <div id="generate-result" class="result-box">
+          <div class="result-header">
+            <div id="result-dot" class="status-dot pending"></div>
+            <strong id="result-title">En cours de génération…</strong>
+          </div>
+          <div id="result-content">
+            <div class="loader">
+              <div class="spinner"></div>
+              <span class="text-muted">Les agents travaillent…</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3>Comment ça marche</h3>
+          <ol style="padding-left:18px; line-height:2; font-size:0.88rem; color:var(--muted);">
+            <li>Décrivez votre besoin métier</li>
+            <li>Choisissez votre stack (Mode 1) ou laissez les agents recommander (Mode 2)</li>
+            <li>6 agents analysent et génèrent en parallèle</li>
+            <li>Récupérez : infra, dbt, DAGs, CI/CD, sécurité</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: PROPOSALS
+  ================================================================ -->
+  <div id="tab-proposals" class="tab-panel">
+    <div class="section-title">Obtenir des propositions d'architecture</div>
+
+    <div class="grid-2" style="gap:24px; align-items:start;">
+      <div class="card">
+        <div class="grid-2">
+          <div class="field">
+            <label>Cloud</label>
+            <select id="p-cloud">
+              <option value="aws">AWS</option>
+              <option value="gcp">GCP</option>
+              <option value="azure">Azure</option>
+              <option value="local-docker">Local Docker</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Budget</label>
+            <select id="p-budget">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Volume</label>
+            <select id="p-volume">
+              <option value="small">Small</option>
+              <option value="medium" selected>Medium</option>
+              <option value="large">Large</option>
+              <option value="xlarge">XLarge</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Mode</label>
+            <select id="p-mode">
+              <option value="batch" selected>Batch</option>
+              <option value="realtime">Realtime</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="fetchProposals()">💡 Obtenir les propositions</button>
+      </div>
+
+      <div id="proposals-result" style="display:none;">
+        <div id="proposals-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: GENERATORS
+  ================================================================ -->
+  <div id="tab-generators" class="tab-panel">
+    <div class="section-title">Générateurs de fichiers</div>
+
+    <div class="tabs" style="margin-bottom:20px;">
+      <button class="tab active" onclick="switchSubTab('dbt')">dbt Project</button>
+      <button class="tab" onclick="switchSubTab('airflow')">Airflow DAGs</button>
+      <button class="tab" onclick="switchSubTab('dagster')">Dagster</button>
+      <button class="tab" onclick="switchSubTab('prefect')">Prefect</button>
+      <button class="tab" onclick="switchSubTab('terraform')">🏗 Terraform</button>
+      <button class="tab" onclick="switchSubTab('lineage')">🔗 Lineage</button>
+      <button class="tab" onclick="switchSubTab('migration')">🔄 Migration</button>
+      <button class="tab" onclick="switchSubTab('costs')">💰 Coûts</button>
+    </div>
+
+    <!-- dbt -->
+    <div id="subtab-dbt" class="tab-panel active">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <div class="field">
+            <label>Besoin métier</label>
+            <input id="dbt-request" type="text" placeholder="Analyse des ventes par agence" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Data Warehouse</label>
+              <select id="dbt-warehouse">
+                <option value="snowflake">Snowflake</option>
+                <option value="bigquery">BigQuery</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="redshift">Redshift</option>
+                <option value="databricks">Databricks</option>
+                <option value="clickhouse">ClickHouse</option>
+                <option value="duckdb">DuckDB</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="dbt-ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="fivetran">Fivetran</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateDbt()">⚡ Générer le projet dbt</button>
+        </div>
+        <div id="dbt-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Airflow -->
+    <div id="subtab-airflow" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <div class="field">
+            <label>Besoin métier</label>
+            <input id="dag-request" type="text" placeholder="Pipeline ventes quotidien" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Ingestion</label>
+              <select id="dag-ingestion">
+                <option value="airbyte">Airbyte</option>
+                <option value="meltano">Meltano</option>
+                <option value="kafka-connect">Kafka Connect</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Transformation</label>
+              <select id="dag-transform">
+                <option value="dbt">dbt</option>
+                <option value="spark">Spark</option>
+                <option value="sqlmesh">SQLMesh</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Qualité</label>
+              <select id="dag-quality">
+                <option value="great-expectations">Great Expectations</option>
+                <option value="soda-core">Soda Core</option>
+                <option value="dbt-tests">dbt tests</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mode</label>
+              <select id="dag-mode">
+                <option value="batch" selected>Batch</option>
+                <option value="realtime">Realtime</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateDags()">⚡ Générer les DAGs</button>
+        </div>
+        <div id="dag-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Dagster -->
+    <div id="subtab-dagster" class="tab-panel">
+      <div class="card" style="max-width:500px;">
+        <div class="field">
+          <label>Besoin métier</label>
+          <input id="dagster-request" type="text" placeholder="Pipeline analytics" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="dagster-warehouse">
+              <option value="snowflake">Snowflake</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="bigquery">BigQuery</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="dagster-ingestion">
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="generateDagster()">⚡ Générer le projet Dagster</button>
+      </div>
+      <div id="dagster-result" style="margin-top:20px; display:none;"></div>
+    </div>
+
+    <!-- Prefect -->
+    <div id="subtab-prefect" class="tab-panel">
+      <div class="card" style="max-width:500px;">
+        <div class="field">
+          <label>Besoin métier</label>
+          <input id="prefect-request" type="text" placeholder="Pipeline analytics" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="prefect-warehouse">
+              <option value="snowflake">Snowflake</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="bigquery">BigQuery</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="prefect-ingestion">
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="generatePrefect()">⚡ Générer les Flows Prefect</button>
+      </div>
+      <div id="prefect-result" style="margin-top:20px; display:none;"></div>
+    </div>
+
+    <!-- Terraform -->
+    <div id="subtab-terraform" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <div class="field">
+            <label>Besoin métier</label>
+            <input id="tf-request" type="text" placeholder="Plateforme analytics e-commerce" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Cloud</label>
+              <select id="tf-cloud">
+                <option value="aws">AWS</option>
+                <option value="gcp">GCP</option>
+                <option value="azure">Azure</option>
+                <option value="other">Local / Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Data Warehouse</label>
+              <select id="tf-warehouse">
+                <option value="snowflake">Snowflake</option>
+                <option value="bigquery">BigQuery</option>
+                <option value="redshift">Redshift</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="synapse">Synapse</option>
+                <option value="clickhouse">ClickHouse</option>
+                <option value="duckdb">DuckDB</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Déploiement</label>
+              <select id="tf-deployment">
+                <option value="kubernetes">Kubernetes</option>
+                <option value="docker-compose">Docker Compose</option>
+                <option value="serverless">Serverless</option>
+                <option value="vm">VM</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Budget</label>
+              <select id="tf-budget">
+                <option value="low">Low (&lt;$500/mois)</option>
+                <option value="medium" selected>Medium ($500–5k/mois)</option>
+                <option value="enterprise">Enterprise (&gt;$5k/mois)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateTerraform()">🏗 Générer les modules Terraform</button>
+        </div>
+        <div id="terraform-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Lineage -->
+    <div id="subtab-lineage" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <h3>Générer le diagramme de lineage</h3>
+          <div class="field">
+            <label>Stack JSON (validée)</label>
+            <textarea id="lineage-stack" rows="12" style="font-family:monospace; font-size:0.8rem;">{
+  "cloud_provider": "aws",
+  "data_warehouse": "snowflake",
+  "orchestrator": "airflow",
+  "ingestion": "airbyte",
+  "transformation": "dbt",
+  "bi_tool": "metabase",
+  "quality": "great-expectations",
+  "catalog": "datahub",
+  "deployment": "kubernetes"
+}</textarea>
+          </div>
+          <button class="btn btn-primary" onclick="generateLineage()">🔗 Générer le diagramme</button>
+        </div>
+        <div id="lineage-result" style="display:none;">
+          <div class="card">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+              <h3 style="margin:0;">Diagramme Mermaid</h3>
+              <button class="btn btn-secondary btn-sm" onclick="copyLineage()">📋 Copier</button>
+              <a id="lineage-live-link" href="#" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">🌐 mermaid.live</a>
+            </div>
+            <div id="lineage-meta" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"></div>
+            <pre id="lineage-code" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:14px; overflow-x:auto; font-size:0.78rem; white-space:pre;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Migration -->
+    <div id="subtab-migration" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <!-- Stack actuelle -->
+        <div class="card">
+          <h3>Stack actuelle</h3>
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="mig-from-warehouse">
+              <option value="">-- aucun --</option>
+              <option value="redshift">Redshift</option>
+              <option value="snowflake">Snowflake</option>
+              <option value="bigquery">BigQuery</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="duckdb">DuckDB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Orchestrateur</label>
+            <select id="mig-from-orchestrator">
+              <option value="">-- aucun --</option>
+              <option value="airflow">Airflow</option>
+              <option value="dagster">Dagster</option>
+              <option value="prefect">Prefect</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="mig-from-ingestion">
+              <option value="">-- aucun --</option>
+              <option value="fivetran">Fivetran</option>
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BI Tool</label>
+            <select id="mig-from-bi_tool">
+              <option value="">-- aucun --</option>
+              <option value="tableau">Tableau</option>
+              <option value="looker">Looker</option>
+              <option value="metabase">Metabase</option>
+              <option value="superset">Superset</option>
+            </select>
+          </div>
+        </div>
+        <!-- Stack cible -->
+        <div class="card">
+          <h3>Stack cible</h3>
+          <div class="field">
+            <label>Warehouse</label>
+            <select id="mig-to-warehouse">
+              <option value="">-- aucun --</option>
+              <option value="redshift">Redshift</option>
+              <option value="snowflake">Snowflake</option>
+              <option value="bigquery">BigQuery</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="duckdb">DuckDB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Orchestrateur</label>
+            <select id="mig-to-orchestrator">
+              <option value="">-- aucun --</option>
+              <option value="airflow">Airflow</option>
+              <option value="dagster">Dagster</option>
+              <option value="prefect">Prefect</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ingestion</label>
+            <select id="mig-to-ingestion">
+              <option value="">-- aucun --</option>
+              <option value="fivetran">Fivetran</option>
+              <option value="airbyte">Airbyte</option>
+              <option value="meltano">Meltano</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BI Tool</label>
+            <select id="mig-to-bi_tool">
+              <option value="">-- aucun --</option>
+              <option value="tableau">Tableau</option>
+              <option value="looker">Looker</option>
+              <option value="metabase">Metabase</option>
+              <option value="superset">Superset</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="analyzeMigration()">🔄 Analyser la migration</button>
+      </div>
+      <div id="migration-result" style="display:none; margin-top:24px;"></div>
+    </div>
+  </div>
+
+    <!-- Costs -->
+    <div id="subtab-costs" class="tab-panel">
+      <div class="grid-2" style="gap:24px; align-items:start;">
+        <div class="card">
+          <h3>Estimer les coûts de la stack</h3>
+          <div class="field">
+            <label>Stack JSON</label>
+            <textarea id="costs-stack" rows="12" style="font-family:monospace; font-size:0.8rem;">{
+  "cloud_provider": "aws",
+  "data_warehouse": "snowflake",
+  "orchestrator": "airflow",
+  "ingestion": "fivetran",
+  "transformation": "dbt",
+  "bi_tool": "tableau",
+  "quality": "great-expectations",
+  "catalog": "datahub"
+}</textarea>
+          </div>
+          <div class="field">
+            <label>Budget</label>
+            <select id="costs-budget">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="estimateCosts()">💰 Estimer les coûts</button>
+        </div>
+        <div id="costs-result" style="display:none;">
+          <div class="card">
+            <div style="margin-bottom:18px;">
+              <div style="font-size:0.82rem; color:var(--muted); margin-bottom:4px;">Coût mensuel estimé</div>
+              <div id="costs-monthly" class="cost-big"></div>
+              <div id="costs-yearly" style="font-size:1rem; color:var(--muted); margin-top:4px;"></div>
+            </div>
+
+            <h3 style="margin-bottom:12px;">Détail par composant</h3>
+            <table id="costs-table" style="width:100%; border-collapse:collapse; font-size:0.84rem; margin-bottom:20px;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+                  <th style="text-align:left; padding:6px 8px;">Composant</th>
+                  <th style="text-align:left; padding:6px 8px;">Outil</th>
+                  <th style="text-align:right; padding:6px 8px;">$/mois</th>
+                  <th style="text-align:left; padding:6px 8px;">Notes</th>
+                </tr>
+              </thead>
+              <tbody id="costs-table-body"></tbody>
+            </table>
+
+            <div id="costs-tips-section" style="display:none; margin-bottom:20px;">
+              <h3 style="margin-bottom:10px;">Conseils d'économies</h3>
+              <ul id="costs-tips" style="list-style:none; padding:0;"></ul>
+            </div>
+
+            <h3 style="margin-bottom:12px;">Comparaison multi-cloud</h3>
+            <div id="costs-comparison" style="display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- ================================================================
+       TAB: CATALOG
+  ================================================================ -->
+  <div id="tab-catalog" class="tab-panel">
+    <div class="section-title">Outils supportés</div>
+    <div id="catalog-content">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: JOBS
+  ================================================================ -->
+  <div id="tab-jobs" class="tab-panel">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+      <div class="section-title" style="margin:0;">Historique des jobs</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadJobs()">↺ Rafraîchir</button>
+    </div>
+    <div id="jobs-content">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: TEMPLATES
+  ================================================================ -->
+  <div id="tab-templates" class="tab-panel">
+    <div class="section-title">📋 Templates de stacks prédéfinis</div>
+    <p class="text-muted" style="margin-bottom:20px;">Choisissez un template adapté à votre contexte. Cliquez sur une carte pour voir les détails et générer votre architecture.</p>
+
+    <!-- Category filter -->
+    <div id="template-filters" style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+      <button class="btn btn-secondary btn-sm template-filter-btn active" onclick="loadTemplates(null)" data-cat="">Tous</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('startup')" data-cat="startup">🚀 Startup</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('analytics')" data-cat="analytics">📊 Analytics</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('enterprise')" data-cat="enterprise">🏢 Enterprise</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('streaming')" data-cat="streaming">⚡ Streaming</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('ml')" data-cat="ml">🤖 ML</button>
+    </div>
+
+    <!-- Template cards grid -->
+    <div id="template-grid" class="proposal-grid">
+      <div class="loader"><div class="spinner"></div><p class="text-muted">Chargement des templates…</p></div>
+    </div>
+
+    <!-- Template detail panel -->
+    <div id="template-detail" style="display:none;margin-top:28px;">
+      <div class="card">
+        <div id="template-detail-content"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// Globals
+// ============================================================
+let currentMode = 'explicit';
+let pollTimer = null;
+let currentSubTab = 'dbt';
+
+// ============================================================
+// Tab switching
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tabs > .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'catalog') loadCatalog();
+  if (name === 'jobs') loadJobs();
+}
+
+function switchSubTab(name) {
+  currentSubTab = name;
+  document.querySelectorAll('#tab-generators .tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#tab-generators .tabs .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('subtab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ============================================================
+// Mode toggle
+// ============================================================
+function selectMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-explicit-btn').classList.toggle('active', mode === 'explicit');
+  document.getElementById('mode-recommended-btn').classList.toggle('active', mode === 'recommended');
+  document.getElementById('mode1-fields').style.display = mode === 'explicit' ? 'block' : 'none';
+  document.getElementById('mode2-fields').style.display = mode === 'recommended' ? 'block' : 'none';
+}
+
+// ============================================================
+// Generate
+// ============================================================
+let _sseSource = null;
+let _lastJobId = null;
+
+async function runGenerate() {
+  const btn = document.getElementById('generate-btn');
+  const request = document.getElementById('business_request').value.trim();
+  if (!request) { toast('Décrivez votre besoin métier', 'error'); return; }
+
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ En cours…';
+
+  const resultBox = document.getElementById('generate-result');
+  resultBox.classList.add('visible');
+  document.getElementById('result-dot').className = 'status-dot pending';
+  document.getElementById('result-title').textContent = 'Génération en cours…';
+  document.getElementById('result-content').innerHTML = `
+    <div class="loader">
+      <div class="spinner"></div>
+      <span class="text-muted" id="sse-status">Envoi de la requête…</span>
+    </div>
+    <div id="sse-progress" style="margin-top:12px; font-size:0.78rem; color:var(--muted);"></div>`;
+
+  const payload = buildPayload(request);
+
+  try {
+    // Submit job
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erreur serveur');
+    }
+    const { job_id } = await res.json();
+
+    // Stream progress via SSE
+    document.getElementById('sse-status').textContent = `Job ${job_id.slice(0,8)}… — agents en cours…`;
+
+    _sseSource = new EventSource(`/generate/stream?job_id=${job_id}`);
+
+    _sseSource.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        const prog = document.getElementById('sse-progress');
+        if (msg.type === 'progress' && prog) {
+          prog.textContent = msg.message || '';
+        } else if (msg.type === 'done') {
+          _sseSource.close(); _sseSource = null;
+          _lastJobId = job_id;
+          renderResult(msg.result);
+          toast('Architecture générée avec succès !', 'success');
+          btn.disabled = false; btn.textContent = '⚡ Générer';
+        } else if (msg.type === 'error') {
+          throw new Error(msg.error || 'Erreur inconnue');
+        }
+      } catch (parseErr) {
+        _sseSource.close(); _sseSource = null;
+        _showGenError(parseErr.message);
+        btn.disabled = false; btn.textContent = '⚡ Générer';
+      }
+    };
+
+    _sseSource.onerror = () => {
+      if (_sseSource) { _sseSource.close(); _sseSource = null; }
+      // Fallback: poll job status once
+      _pollJobFallback(job_id, btn);
+    };
+
+  } catch (e) {
+    _showGenError(e.message);
+    btn.disabled = false;
+    btn.textContent = '⚡ Générer';
+  }
+}
+
+function _showGenError(msg) {
+  document.getElementById('result-dot').className = 'status-dot error';
+  document.getElementById('result-title').textContent = 'Erreur de génération';
+  document.getElementById('result-content').innerHTML =
+    `<p class="text-danger" style="padding:12px;">${msg}</p>`;
+  toast(msg, 'error');
+}
+
+async function _pollJobFallback(jobId, btn) {
+  try {
+    const res = await fetch(`/jobs/${jobId}`);
+    const data = await res.json();
+    if (data.status === 'completed' && data.result) {
+      _lastJobId = jobId;
+      renderResult(data.result);
+      toast('Architecture générée avec succès !', 'success');
+    } else if (data.status === 'failed') {
+      _showGenError(data.error || 'Échec de génération');
+    } else {
+      setTimeout(() => _pollJobFallback(jobId, btn), 2000);
+      return;
+    }
+  } catch (e) {
+    _showGenError(e.message);
+  }
+  btn.disabled = false; btn.textContent = '⚡ Générer';
+}
+
+function buildPayload(request) {
+  if (currentMode === 'explicit') {
+    return {
+      mode: 'explicit',
+      business_request: request,
+      cloud_provider:   document.getElementById('cloud_provider').value,
+      data_warehouse:   document.getElementById('data_warehouse').value,
+      orchestrator:     document.getElementById('orchestrator').value,
+      ingestion:        document.getElementById('ingestion').value,
+      transformation:   document.getElementById('transformation').value,
+      bi_tool:          document.getElementById('bi_tool').value,
+      deployment:       document.getElementById('deployment').value,
+      budget:           document.getElementById('budget').value,
+      security:         ['RBAC'],
+    };
+  } else {
+    const compliance = document.getElementById('compliance_requirements').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+    return {
+      mode: 'recommended',
+      business_request: request,
+      budget:           document.getElementById('budget2').value,
+      data_volume:      document.getElementById('data_volume').value,
+      team_size:        document.getElementById('team_size').value,
+      security_level:   document.getElementById('security_level').value,
+      cloud_preference: document.getElementById('cloud_preference').value,
+      processing_mode:  document.getElementById('processing_mode2').value,
+      must_be_open_source: document.getElementById('must_be_open_source').value === 'true',
+      compliance_requirements: compliance,
+    };
+  }
+}
+
+function renderResult(data) {
+  document.getElementById('result-dot').className = 'status-dot';
+  document.getElementById('result-title').textContent = data.success ? '✅ Génération réussie' : '⚠ Terminé avec avertissements';
+
+  const sa = data.stack_advisor || {};
+  const co = data.cost_optimization || {};
+  const sec = data.security_compliance || {};
+  const dep = data.deployment || {};
+  const infra = data.infrastructure || {};
+
+  const stack = sa.validated_stack || {};
+  const stackCards = Object.entries(stack)
+    .map(([k,v]) => `<div class="stack-card"><div class="layer">${k}</div><div class="tool">${v}</div></div>`)
+    .join('');
+
+  const warnings = (sa.warnings || [])
+    .map(w => `<li>${w}</li>`).join('') || '<li style="color:var(--success)">Aucun avertissement</li>';
+
+  const artifacts = (infra.artifact_keys || [])
+    .map(k => `<li><span class="artifact-icon">${k.endsWith('.yml') ? '📄' : k.endsWith('.tf') ? '🏗' : '📁'}</span>${k}</li>`)
+    .join('');
+
+  const stages = (dep.pipeline_stages || [])
+    .map(s => `<li style="padding:3px 0; font-size:0.82rem;">${s}</li>`).join('');
+
+  document.getElementById('result-content').innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:20px;">
+
+      <div>
+        <div class="agent-title"><div class="dot"></div>Stack validée</div>
+        <div class="stack-grid">${stackCards}</div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="agent-title"><div class="dot"></div>Coûts estimés</div>
+          <div class="cost-big">$${(co.total_monthly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}<span style="font-size:1rem;color:var(--muted)">/mois</span></div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;">$${(co.total_yearly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}/an</div>
+        </div>
+        <div>
+          <div class="agent-title"><div class="dot"></div>Sécurité & Compliance</div>
+          <div style="font-size:0.82rem;color:var(--muted);">
+            ${(sec.compliance_notes||[]).slice(0,3).map(n=>`• ${n}`).join('<br>') || '• Configuration standard RBAC'}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="agent-title"><div class="dot"></div>Avertissements</div>
+        <ul class="warning-list">${warnings}</ul>
+      </div>
+
+      ${artifacts ? `<div>
+        <div class="agent-title"><div class="dot"></div>Fichiers générés (infra)</div>
+        <ul class="artifact-list">${artifacts}</ul>
+      </div>` : ''}
+
+      ${stages ? `<div>
+        <div class="agent-title"><div class="dot"></div>Pipeline CI/CD</div>
+        <ul style="padding-left:0;list-style:none;">${stages}</ul>
+      </div>` : ''}
+
+      ${_lastJobId ? `<div style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+        <button class="btn btn-secondary" id="download-btn" onclick="downloadLastJob()">&#x2B07; Télécharger ZIP</button>
+      </div>` : ''}
+    </div>`;
+}
+
+function resetForm() {
+  document.getElementById('business_request').value = '';
+  document.getElementById('generate-result').classList.remove('visible');
+}
+
+function downloadLastJob() {
+  if (!_lastJobId) { toast('Pas de job à télécharger', 'error'); return; }
+  window.location = `/jobs/${_lastJobId}/download`;
+}
+
+// ============================================================
+// Proposals
+// ============================================================
+async function fetchProposals() {
+  const div = document.getElementById('proposals-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/proposals', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        cloud_provider:  document.getElementById('p-cloud').value,
+        budget:          document.getElementById('p-budget').value,
+        data_volume:     document.getElementById('p-volume').value,
+        processing_mode: document.getElementById('p-mode').value,
+        deployment:      'kubernetes',
+        security:        ['RBAC'],
+      }),
+    });
+    const data = await res.json();
+    renderProposals(data.proposals || []);
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+function renderProposals(proposals) {
+  const div = document.getElementById('proposals-result');
+  const cards = proposals.map(p => `
+    <div class="proposal-card" onclick="selectProposal(this, '${p.id}')">
+      <div class="proposal-name">${p.name}</div>
+      <div class="proposal-tagline">${p.tagline || ''}</div>
+      <div class="proposal-cost">$${(p.estimated_monthly_usd||0).toLocaleString('fr-FR', {maximumFractionDigits:0})}<span style="font-size:0.85rem;color:var(--muted)">/mois</span></div>
+      <div class="proposal-meta">
+        <span class="tag complexity-${p.complexity}">${p.complexity}</span>
+        <span class="tag">${p.time_to_deploy || ''}</span>
+        <span class="tag">${p.stack?.warehouse || ''}</span>
+        <span class="tag">${p.stack?.orchestrator || ''}</span>
+      </div>
+      <div style="margin-top:12px; font-size:0.8rem;">
+        ${(p.pros||[]).slice(0,3).map(pr=>`<div style="color:var(--success);margin-bottom:2px;">✓ ${pr}</div>`).join('')}
+      </div>
+    </div>`).join('');
+  div.innerHTML = `<div class="proposal-grid">${cards}</div>`;
+}
+
+function selectProposal(el, id) {
+  document.querySelectorAll('.proposal-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  toast(`Proposition ${id} sélectionnée`, 'success');
+}
+
+// ============================================================
+// dbt generator
+// ============================================================
+async function generateDbt() {
+  const req = document.getElementById('dbt-request').value.trim() || 'Analyse des ventes';
+  const div = document.getElementById('dbt-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dbt/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('dbt-warehouse').value,
+        ingestion: document.getElementById('dbt-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dbt');
+    toast(`${data.file_count} fichiers dbt générés`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Airflow DAG generator
+// ============================================================
+async function generateDags() {
+  const req = document.getElementById('dag-request').value.trim() || 'Pipeline data';
+  const div = document.getElementById('dag-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dags/airflow/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        ingestion: document.getElementById('dag-ingestion').value,
+        transformation: document.getElementById('dag-transform').value,
+        quality: document.getElementById('dag-quality').value,
+        processing_mode: document.getElementById('dag-mode').value,
+        data_warehouse: 'snowflake',
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dags');
+    toast(`${data.dag_count} DAGs générés`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Dagster generator
+// ============================================================
+async function generateDagster() {
+  const req = document.getElementById('dagster-request').value.trim() || 'Pipeline analytics';
+  const div = document.getElementById('dagster-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/dagster/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('dagster-warehouse').value,
+        ingestion: document.getElementById('dagster-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'dagster');
+    toast(`Projet Dagster généré (${data.file_count} fichiers)`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Prefect generator
+// ============================================================
+async function generatePrefect() {
+  const req = document.getElementById('prefect-request').value.trim() || 'Pipeline analytics';
+  const div = document.getElementById('prefect-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/prefect/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        data_warehouse: document.getElementById('prefect-warehouse').value,
+        ingestion: document.getElementById('prefect-ingestion').value,
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'prefect');
+    toast(`Flows Prefect générés (${data.file_count} fichiers)`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// File list renderer
+// ============================================================
+function renderFileList(div, data, type) {
+  const files = data.files || {};
+  const keys = Object.keys(files);
+  const icons = { '.yml':'📄', '.yaml':'📄', '.py':'🐍', '.sql':'🗃', '.md':'📝', '.tf':'🏗', '.json':'📋', '.toml':'⚙' };
+  const getIcon = f => {
+    const ext = '.' + f.split('.').pop();
+    return icons[ext] || '📁';
+  };
+  const list = keys.map(k => `
+    <li style="cursor:pointer;" onclick="showFile('${k}', \`${escapeBacktick(files[k])}\`)">
+      <span class="artifact-icon">${getIcon(k)}</span>
+      <span style="font-size:0.82rem;">${k}</span>
+    </li>`).join('');
+
+  div.innerHTML = `
+    <div class="card">
+      <h3>${keys.length} fichiers générés</h3>
+      <ul class="artifact-list">${list}</ul>
+    </div>
+    <div id="file-preview-${type}" style="display:none; margin-top:16px;" class="card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <strong id="file-preview-name-${type}" style="font-size:0.9rem;"></strong>
+        <button class="btn btn-secondary btn-sm" onclick="copyFileContent('${type}')">📋 Copier</button>
+      </div>
+      <pre id="file-preview-content-${type}" style="max-height:400px; overflow-y:auto; font-size:0.78rem; color:var(--muted);"></pre>
+    </div>`;
+}
+
+function showFile(name, content) {
+  const preview = document.getElementById('file-preview-' + currentSubTab);
+  if (!preview) return;
+  preview.style.display = 'block';
+  document.getElementById('file-preview-name-' + currentSubTab).textContent = name;
+  document.getElementById('file-preview-content-' + currentSubTab).textContent = content;
+}
+
+function copyFileContent(type) {
+  const content = document.getElementById('file-preview-content-' + type)?.textContent || '';
+  navigator.clipboard.writeText(content).then(() => toast('Copié !', 'success'));
+}
+
+function escapeBacktick(s) {
+  return (s || '').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
+// ============================================================
+// Catalog
+// ============================================================
+async function loadCatalog() {
+  const div = document.getElementById('catalog-content');
+  if (div.dataset.loaded) return;
+
+  try {
+    const [stackRes, adapterRes] = await Promise.all([
+      fetch('/stacks/supported'),
+      fetch('/stacks/adapters'),
+    ]);
+    const stacks = await stackRes.json();
+    const adapters = await adapterRes.json();
+
+    const catLabels = {
+      warehouse:'Data Warehouse', orchestration:'Orchestration', ingestion:'Ingestion',
+      transformation:'Transformation', storage:'Storage', bi:'BI / Analytics',
+      quality:'Data Quality', catalog:'Data Catalog', ai:'AI / LLM',
+      vector:'Vector DB', monitoring:'Monitoring', security:'Sécurité', cloud:'Cloud',
+    };
+
+    const cards = Object.entries(stacks.categories || {}).map(([cat, tools]) => {
+      const registeredAdapters = (adapters.adapters || {})[cat] || [];
+      const toolList = tools.map(t => {
+        const hasAdapter = registeredAdapters.includes(t);
+        return `<span class="tag" style="margin:2px;${hasAdapter?'color:var(--success)':''}">${t}${hasAdapter?' ✓':''}</span>`;
+      }).join('');
+      return `<div class="card">
+        <h3>${catLabels[cat] || cat}</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${toolList}</div>
+      </div>`;
+    }).join('');
+
+    div.innerHTML = `
+      <div style="margin-bottom:16px;" class="text-muted">
+        <strong style="color:var(--success)">✓</strong> = adaptateur implémenté
+        &nbsp;|&nbsp; Total adaptateurs : <strong>${adapters.adapter_count}</strong>
+      </div>
+      <div class="grid-3">${cards}</div>`;
+    div.dataset.loaded = '1';
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Jobs history
+// ============================================================
+async function loadJobs() {
+  const div = document.getElementById('jobs-content');
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/jobs');
+    const jobs = await res.json();
+
+    if (!jobs.length) {
+      div.innerHTML = '<p class="text-muted" style="padding:20px;">Aucun job pour l\'instant.</p>';
+      return;
+    }
+
+    const statusColor = s => s === 'completed' ? 'var(--success)' : s === 'failed' ? 'var(--danger)' : 'var(--warning)';
+    const rows = jobs.map(j => `
+      <tr>
+        <td><code style="font-size:0.75rem;">${j.job_id.slice(0,8)}…</code></td>
+        <td><span style="color:${statusColor(j.status)}">${j.status}</span></td>
+        <td class="text-muted" style="font-size:0.8rem;">${new Date(j.created_at*1000).toLocaleString('fr-FR')}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="showJobDetail('${j.job_id}')">Détail</button></td>
+      </tr>`).join('');
+
+    div.innerHTML = `
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; font-size:0.82rem; color:var(--muted);">
+            <th style="padding:8px 0;">Job ID</th>
+            <th>Statut</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+async function showJobDetail(jobId) {
+  try {
+    const res = await fetch(`/jobs/${jobId}`);
+    const data = await res.json();
+    toast(`Job ${jobId.slice(0,8)}: ${data.status}`, data.status === 'completed' ? 'success' : 'error');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ============================================================
+// Toast
+// ============================================================
+let toastTimer = null;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type;
+  el.style.display = 'block';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+// ============================================================
+// Terraform generator
+// ============================================================
+async function generateTerraform() {
+  const req = document.getElementById('tf-request').value.trim() || 'Plateforme analytics';
+  const div = document.getElementById('terraform-result');
+  div.style.display = 'block';
+  div.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch('/terraform/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_request: req,
+        cloud_provider:   document.getElementById('tf-cloud').value,
+        data_warehouse:   document.getElementById('tf-warehouse').value,
+        deployment:       document.getElementById('tf-deployment').value,
+        budget:           document.getElementById('tf-budget').value,
+        orchestrator:     'airflow',
+        ingestion:        'airbyte',
+        transformation:   'dbt',
+        bi_tool:          'metabase',
+        security:         ['RBAC'],
+      }),
+    });
+    const data = await res.json();
+    renderFileList(div, data, 'terraform');
+    toast(`${data.file_count} fichiers Terraform générés`, 'success');
+  } catch (e) {
+    div.innerHTML = `<p class="text-danger">${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// Lineage generator
+// ============================================================
+async function generateLineage() {
+  const stackJson = document.getElementById('lineage-stack').value;
+  let stack;
+  try { stack = JSON.parse(stackJson); } catch(e) { toast('JSON invalide', 'error'); return; }
+
+  const resultDiv = document.getElementById('lineage-result');
+  resultDiv.style.display = 'none';
+
+  try {
+    const res = await fetch('/lineage/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ stack, business_request: '' }),
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
+    const data = await res.json();
+
+    document.getElementById('lineage-code').textContent = data.mermaid;
+    document.getElementById('lineage-live-link').href = data.embed_url;
+    document.getElementById('lineage-meta').textContent =
+      `${data.nodes.length} nœuds · ${data.edge_count} connexions`;
+    resultDiv.style.display = 'block';
+    toast(`Lineage généré — ${data.nodes.length} nœuds`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function copyLineage() {
+  const code = document.getElementById('lineage-code').textContent;
+  navigator.clipboard.writeText(code).then(() => toast('Copié !', 'success'));
+}
+
+// ============================================================
+// Migration analyzer
+// ============================================================
+async function analyzeMigration() {
+  const components = ['warehouse', 'orchestrator', 'ingestion', 'bi_tool'];
+  const fromStack = {}, toStack = {};
+  components.forEach(c => {
+    const fv = document.getElementById('mig-from-' + c).value;
+    const tv = document.getElementById('mig-to-' + c).value;
+    if (fv) fromStack['data_' + c === 'data_warehouse' ? 'data_warehouse' : c] = fv;
+    if (tv) toStack['data_' + c === 'data_warehouse' ? 'data_warehouse' : c] = tv;
+  });
+  // Fix key mapping: 'warehouse' -> 'data_warehouse', others keep as-is
+  const fromFinal = {}, toFinal = {};
+  if (fromStack['data_warehouse']) fromFinal['data_warehouse'] = fromStack['data_warehouse'];
+  if (fromStack['orchestrator']) fromFinal['orchestrator'] = fromStack['orchestrator'];
+  if (fromStack['ingestion']) fromFinal['ingestion'] = fromStack['ingestion'];
+  if (fromStack['bi_tool']) fromFinal['bi_tool'] = fromStack['bi_tool'];
+  if (toStack['data_warehouse']) toFinal['data_warehouse'] = toStack['data_warehouse'];
+  if (toStack['orchestrator']) toFinal['orchestrator'] = toStack['orchestrator'];
+  if (toStack['ingestion']) toFinal['ingestion'] = toStack['ingestion'];
+  if (toStack['bi_tool']) toFinal['bi_tool'] = toStack['bi_tool'];
+
+  // Re-read raw values directly for clarity
+  const rawFrom = {}, rawTo = {};
+  components.forEach(c => {
+    const key = c === 'warehouse' ? 'data_warehouse' : c;
+    const fv = document.getElementById('mig-from-' + c).value;
+    const tv = document.getElementById('mig-to-' + c).value;
+    if (fv) rawFrom[key] = fv;
+    if (tv) rawTo[key] = tv;
+  });
+
+  const resultEl = document.getElementById('migration-result');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch('/stacks/diff', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({from_stack: rawFrom, to_stack: rawTo})
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const riskColor = data.overall_risk === 'high' ? 'var(--error,#ef4444)' : data.overall_risk === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+    let html = `<div class="card">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+        <span style="background:${riskColor};color:#fff;padding:4px 12px;border-radius:20px;font-weight:700;font-size:0.85rem;">Risque: ${data.overall_risk.toUpperCase()}</span>
+        <span style="background:var(--surface2,#1e293b);padding:4px 12px;border-radius:20px;font-size:0.85rem;">~${data.total_estimated_days} jours</span>
+      </div>
+      <p style="color:var(--muted);margin-bottom:20px;">${data.summary}</p>`;
+
+    if (data.changes.length === 0) {
+      html += '<p style="color:var(--success);">Aucun changement détecté — stacks identiques.</p>';
+    } else {
+      html += '<div class="section-title" style="margin-bottom:12px;">Plan de migration (ordre recommandé)</div>';
+      const byComp = Object.fromEntries(data.changes.map(c => [c.component, c]));
+      data.migration_order.forEach((comp, i) => {
+        const c = byComp[comp]; if (!c) return;
+        const effortColor = c.effort === 'high' ? 'var(--error,#ef4444)' : c.effort === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+        const rColor = c.risk === 'high' ? 'var(--error,#ef4444)' : c.risk === 'medium' ? 'var(--warning,#f59e0b)' : 'var(--success,#22c55e)';
+        const stepsId = 'mig-steps-' + i;
+        html += `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;" onclick="document.getElementById('${stepsId}').style.display=document.getElementById('${stepsId}').style.display==='none'?'block':'none'">
+            <span style="font-weight:600;">${i+1}. ${comp}</span>
+            <span style="color:var(--muted);font-size:0.85rem;">${c.from_tool || '—'} → ${c.to_tool || '—'}</span>
+            <span style="background:${effortColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;">effort: ${c.effort}</span>
+            <span style="background:${rColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;">risque: ${c.risk}</span>
+            <span style="color:var(--muted);font-size:0.8rem;margin-left:auto;">${c.estimated_days}j ▼</span>
+          </div>
+          <ol id="${stepsId}" style="display:none;margin:12px 0 0 20px;color:var(--muted);font-size:0.85rem;">
+            ${c.migration_steps.map(s => `<li style="margin-bottom:4px;">${s}</li>`).join('')}
+          </ol>
+        </div>`;
+      });
+    }
+    html += `<div style="margin-top:20px;padding:12px;background:var(--surface2,#1e293b);border-radius:8px;">
+      <div style="font-weight:600;margin-bottom:6px;">Stratégie de rollback</div>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0;">${data.rollback_strategy}</p>
+    </div></div>`;
+    resultEl.innerHTML = html;
+  } catch(e) {
+    resultEl.innerHTML = `<div class="card" style="color:var(--error,#ef4444);">Erreur: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// Cost estimation
+// ============================================================
+async function estimateCosts() {
+  const resultEl = document.getElementById('costs-result');
+  const stackJson = document.getElementById('costs-stack').value;
+  const budget = document.getElementById('costs-budget').value;
+  let stack;
+  try { stack = JSON.parse(stackJson); } catch(e) {
+    alert('JSON invalide: ' + e.message); return;
+  }
+  resultEl.style.display = 'block';
+  document.getElementById('costs-monthly').textContent = '...';
+  document.getElementById('costs-yearly').textContent = '';
+  document.getElementById('costs-table-body').innerHTML = '';
+  document.getElementById('costs-tips').innerHTML = '';
+  document.getElementById('costs-comparison').innerHTML = '';
+  try {
+    const res = await fetch('/costs/estimate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stack, budget}),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur serveur');
+    const data = await res.json();
+
+    document.getElementById('costs-monthly').textContent = '$' + data.total_monthly_usd.toLocaleString();
+    document.getElementById('costs-yearly').textContent = '≈ $' + data.total_yearly_usd.toLocaleString() + ' / an';
+
+    // Line items
+    const tbody = document.getElementById('costs-table-body');
+    tbody.innerHTML = '';
+    (data.line_items || []).forEach(item => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.innerHTML = `<td style="padding:6px 8px;">${item.component}</td>
+        <td style="padding:6px 8px; color:var(--accent2);">${item.tool}</td>
+        <td style="padding:6px 8px; text-align:right; font-weight:600;">$${item.monthly_usd.toLocaleString()}</td>
+        <td style="padding:6px 8px; color:var(--muted); font-size:0.8rem;">${item.notes || ''}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Savings tips
+    const tips = data.savings_tips || [];
+    const tipsSection = document.getElementById('costs-tips-section');
+    const tipsList = document.getElementById('costs-tips');
+    tipsList.innerHTML = '';
+    if (tips.length > 0) {
+      tipsSection.style.display = 'block';
+      tips.forEach(tip => {
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:7px 0; border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--warning);';
+        li.textContent = '💡 ' + tip;
+        tipsList.appendChild(li);
+      });
+    } else {
+      tipsSection.style.display = 'none';
+    }
+
+    // Multi-cloud comparison bar chart (pure CSS)
+    const comparison = data.comparison || {};
+    const compEl = document.getElementById('costs-comparison');
+    compEl.innerHTML = '';
+    const clouds = ['aws', 'gcp', 'azure'];
+    const cloudColors = {aws: '#f59e0b', gcp: '#22d3ee', azure: '#818cf8'};
+    const maxVal = Math.max(...Object.values(comparison), 1);
+    clouds.forEach(cloud => {
+      const val = comparison[cloud] || 0;
+      const pct = Math.max(4, Math.round((val / maxVal) * 100));
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px;';
+      row.innerHTML = `
+        <span style="width:48px; font-size:0.82rem; font-weight:600; color:var(--muted); text-transform:uppercase;">${cloud}</span>
+        <div style="flex:1; background:var(--border); border-radius:4px; height:22px; overflow:hidden;">
+          <div style="width:${pct}%; background:${cloudColors[cloud]}; height:100%; border-radius:4px; transition:width .4s;"></div>
+        </div>
+        <span style="width:80px; text-align:right; font-weight:700; font-size:0.9rem;">$${val.toLocaleString()}</span>`;
+      compEl.appendChild(row);
+    });
+  } catch(e) {
+    resultEl.innerHTML = `<div class="card" style="color:var(--danger);">Erreur: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// Health badge
+// ============================================================
+async function checkHealth() {
+  const badge = document.getElementById('health-badge');
+  try {
+    const res = await fetch('/readyz');
+    if (res.ok) {
+      badge.textContent = '● healthy';
+      badge.style.color = 'var(--success)';
+      badge.style.borderColor = 'var(--success)';
+    } else {
+      badge.textContent = '● degraded';
+      badge.style.color = 'var(--warning)';
+      badge.style.borderColor = 'var(--warning)';
+    }
+  } catch {
+    badge.textContent = '● offline';
+    badge.style.color = 'var(--danger)';
+    badge.style.borderColor = 'var(--danger)';
+  }
+}
+
+// ============================================================
+// Templates
+// ============================================================
+let _allTemplates = [];
+let _selectedTemplateId = null;
+
+async function loadTemplates(category) {
+  // Update active filter button
+  document.querySelectorAll('.template-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-cat') === (category || ''));
+  });
+
+  const grid = document.getElementById('template-grid');
+  grid.innerHTML = '<div class="loader"><div class="spinner"></div><p class="text-muted">Chargement…</p></div>';
+
+  try {
+    const url = category ? `/templates?category=${encodeURIComponent(category)}` : '/templates';
+    const res = await fetch(url);
+    const data = await res.json();
+    _allTemplates = data.templates || [];
+    renderTemplateCards(_allTemplates);
+  } catch(e) {
+    grid.innerHTML = `<div class="card" style="color:var(--danger);">Erreur: ${e.message}</div>`;
+  }
+}
+
+function renderTemplateCards(templates) {
+  const grid = document.getElementById('template-grid');
+  if (!templates.length) {
+    grid.innerHTML = '<p class="text-muted">Aucun template trouvé.</p>';
+    return;
+  }
+
+  const complexityColor = { low: 'var(--success)', medium: 'var(--warning)', high: 'var(--danger)' };
+
+  grid.innerHTML = templates.map(t => `
+    <div class="proposal-card${_selectedTemplateId === t.id ? ' selected' : ''}" onclick="selectTemplate('${t.id}')">
+      <div class="proposal-name">${t.name}</div>
+      <div class="proposal-tagline">${t.description}</div>
+      <div class="proposal-cost">$${t.estimated_monthly_usd.toLocaleString()}<span style="font-size:0.75rem;font-weight:400;color:var(--muted);">/mois</span></div>
+      <div class="proposal-meta">
+        <span class="tag" style="color:${complexityColor[t.complexity] || 'var(--muted)'};">● ${t.complexity}</span>
+        <span class="tag">${t.time_to_deploy}</span>
+        <span class="tag" style="color:var(--accent2);">${t.category}</span>
+        ${(t.tags || []).slice(0, 3).map(tag => `<span class="tag">${tag}</span>`).join('')}
+      </div>
+      <div style="margin-top:12px;">
+        ${(t.pros || []).slice(0, 2).map(p => `<div style="font-size:0.78rem;color:var(--success);">✓ ${p}</div>`).join('')}
+        ${(t.cons || []).slice(0, 1).map(c => `<div style="font-size:0.78rem;color:var(--muted);">✗ ${c}</div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectTemplate(templateId) {
+  _selectedTemplateId = templateId;
+  renderTemplateCards(_allTemplates); // re-render to update selected highlight
+
+  const detailPanel = document.getElementById('template-detail');
+  const detailContent = document.getElementById('template-detail-content');
+  detailPanel.style.display = 'block';
+  detailContent.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch(`/templates/${templateId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const t = await res.json();
+
+    const stackEntries = Object.entries(t.constraints || {})
+      .filter(([k]) => k !== 'security')
+      .map(([k, v]) => `<div class="stack-card"><div class="layer">${k}</div><div class="tool">${v}</div></div>`)
+      .join('');
+
+    detailContent.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:6px;">${t.name}</h2>
+          <p style="color:var(--muted);max-width:600px;">${t.description}</p>
+        </div>
+        <button class="btn btn-primary" onclick="useTemplate('${t.id}')">🚀 Générer depuis ce template</button>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px;">COÛT ESTIMÉ</div>
+          <div class="cost-big">$${t.estimated_monthly_usd.toLocaleString()}<span style="font-size:1rem;font-weight:400;color:var(--muted);">/mois</span></div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">DÉPLOIEMENT</div>
+          <div>${t.time_to_deploy}</div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            ${(t.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;font-weight:600;">STACK TECHNIQUE</div>
+        <div class="stack-grid">${stackEntries}</div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">AVANTAGES</div>
+          ${(t.pros || []).map(p => `<div style="font-size:0.85rem;color:var(--success);margin-bottom:4px;">✓ ${p}</div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">INCONVÉNIENTS</div>
+          ${(t.cons || []).map(c => `<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">✗ ${c}</div>`).join('')}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">CAS D'USAGE</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${(t.use_cases || []).map(uc => `<span class="tag" style="color:var(--accent2);">${uc}</span>`).join('')}
+        </div>
+      </div>
+    `;
+
+    detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    detailContent.innerHTML = `<div style="color:var(--danger);">Erreur: ${e.message}</div>`;
+  }
+}
+
+function useTemplate(templateId) {
+  const t = _allTemplates.find(x => x.id === templateId);
+  if (!t) return;
+
+  // Switch to generate tab
+  switchTab('generate');
+  selectMode('explicit');
+
+  // Pre-fill form fields from template constraints
+  const stack = t.stack || t.constraints || {};
+  const fieldMap = {
+    cloud: 'cloud_provider',
+    warehouse: 'data_warehouse',
+    orchestrator: 'orchestrator',
+    ingestion: 'ingestion',
+    transformation: 'transformation',
+    bi_tool: 'bi_tool',
+    deployment: 'deployment',
+    budget: 'budget',
+  };
+  Object.entries(fieldMap).forEach(([stackKey, formId]) => {
+    const el = document.getElementById(formId);
+    if (el && stack[stackKey]) {
+      // Try to set value; only works if option exists
+      const opt = Array.from(el.options).find(o => o.value === stack[stackKey]);
+      if (opt) el.value = stack[stackKey];
+    }
+  });
+
+  showToast(`Template "${t.name}" appliqué dans le formulaire`, 'success');
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  checkHealth();
+  setInterval(checkHealth, 30000);
+  setTimeout(loadCatalog, 500);
+  setTimeout(() => loadTemplates(null), 600);
+});
+</script>
+</body>
+</html>

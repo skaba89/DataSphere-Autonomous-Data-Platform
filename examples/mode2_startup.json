@@ -1,0 +1,14 @@
+{
+  "mode": "recommended",
+  "business_request": "Tableau de bord commercial — suivi des KPIs ventes en temps réel",
+  "budget": "low",
+  "data_volume": "small",
+  "security_level": "rbac",
+  "team_size": "small",
+  "processing_mode": "batch",
+  "cloud_preference": "none",
+  "deployment_preference": "docker-compose",
+  "must_be_open_source": true,
+  "existing_tools": [],
+  "compliance_requirements": []
+}

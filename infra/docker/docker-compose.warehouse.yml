@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    profiles: ["clickhouse"]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  duckdb-rest:
+    image: ghcr.io/nicowillis/duckdb-rest-api:latest
+    profiles: ["duckdb"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - duckdb_data:/data
+
+volumes:
+  clickhouse_data:
+  duckdb_data:

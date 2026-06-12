@@ -1,0 +1,22 @@
+global:
+  storageClass: gp3
+
+postgresql:
+  primary:
+    nodeSelector:
+      node.kubernetes.io/instance-type: r6g.large
+
+minio:
+  enabled: false
+
+airflow:
+  enabled: true
+  config:
+    core:
+      executor: KubernetesExecutor
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing

@@ -1,0 +1,45 @@
+version: '3.9'
+
+x-common-env: &common-env
+  TZ: UTC
+
+services:
+  postgresql:
+    image: postgres:16-alpine
+    environment:
+      <<: *common-env
+      POSTGRES_MULTIPLE_DATABASES: "datasphere,airflow,superset,metabase,keycloak,airbyte"
+      POSTGRES_USER: ${POSTGRES_USER:-datasphere}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datasphere}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  datasphere:
+    driver: bridge
