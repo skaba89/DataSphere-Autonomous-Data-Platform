@@ -16,6 +16,13 @@ spec:
       labels:
         {{- include "datasphere.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
+      {{- if .Values.api.metrics.enabled }}
+      annotations:
+        # Prometheus scrape annotations — add a ServiceMonitor CRD if using the Prometheus Operator
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.api.metrics.port | quote }}
+        prometheus.io/path: {{ .Values.api.metrics.path | quote }}
+      {{- end }}
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:

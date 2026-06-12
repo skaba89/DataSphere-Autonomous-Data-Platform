@@ -29,6 +29,10 @@ api:
   # Set via --set api.apiKey=<value> or a secret
   apiKey: ""
   corsOrigins: ""
+  metrics:
+    enabled: true
+    port: 8000
+    path: /metrics
   # Path for SQLite job store (if not using Redis)
   jobDbPath: "/data/jobs.db"
   persistence:

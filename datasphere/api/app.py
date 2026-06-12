@@ -260,6 +260,7 @@ def _run_generation(job_id: str, req: GenerateRequest) -> None:
         except Exception as exc:
             _log.exception("generation_failed", extra={"job_id": job_id, "error": str(exc)})
             job_store.update(job_id, status="failed", error=str(exc))
+            metrics.record_job_failed(mode=req.mode)
             webhook_registry.fire("job.failed", job_id, get_tenant_id(), {"error": str(exc)})
 
 
@@ -531,6 +532,7 @@ def create_app() -> FastAPI:
                 "POST /terraform/generate",
                 "GET  /stacks/supported",
                 "Multi-tenant: set X-Tenant-ID header to isolate jobs per tenant",
+                "GET  /metrics  → Prometheus metrics",
             ],
         }
 
@@ -569,6 +571,7 @@ def create_app() -> FastAPI:
         job_id = str(uuid.uuid4())
         scoped_id = tenant_job_id(job_id)
         job_store.create(scoped_id, status="pending")
+        metrics.record_job_created(mode=req.mode or "explicit")
         _log.info("job_enqueued", extra={"job_id": job_id, "scoped_id": scoped_id, "mode": req.mode, "tenant_id": get_tenant_id()})
         background_tasks.add_task(_run_generation, scoped_id, req)
         return JobResponse(
@@ -1063,6 +1066,20 @@ def create_app() -> FastAPI:
         for (category, name) in registry._registry:
             adapters.setdefault(category, []).append(name)
         return {"adapter_count": len(registry._registry), "adapters": adapters}
+
+    @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
+    def prometheus_metrics() -> PlainTextResponse:
+        """
+        Prometheus-compatible metrics endpoint.
+
+        Metrics: http_requests_total, http_request_duration_seconds,
+        jobs_created_total, jobs_completed_total, jobs_failed_total,
+        generation_duration_seconds, uptime_seconds.
+        """
+        return PlainTextResponse(
+            content=metrics.render(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     return app
 
