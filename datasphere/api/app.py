@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 import datasphere.adapters  # noqa: F401 — trigger adapter registry population
+from datasphere.plugins import plugin_registry
 from datasphere.models.request import ArchitectureConstraints, BusinessRequest
 from datasphere.models.modes import ExplicitStack, RecommendationContext
 from datasphere.agents.mode_router import run_explicit, run_recommended
@@ -363,6 +364,9 @@ def _build_stack_report(result: dict) -> str:
 async def _lifespan(app: FastAPI):
     setup_tracing("datasphere-api")
     _log.info("datasphere_api_starting", extra={"version": _VERSION})
+    # Startup: load plugins
+    plugin_registry.load()
+    _log.info("plugins_loaded count=%d", len(plugin_registry.list_all()))
     # Startup: verify job store is reachable
     try:
         job_store.list_all()
@@ -555,6 +559,7 @@ def create_app() -> FastAPI:
                 "GET  /v1/stacks/supported",
                 "Multi-tenant: set X-Tenant-ID header to isolate jobs per tenant",
                 "GET  /v1/metrics  → Prometheus metrics",
+                "GET  /v1/plugins",
                 "NOTE: Unversioned routes (without /v1) are deprecated and return Deprecation: true header",
             ],
         }
@@ -1184,6 +1189,18 @@ def create_app() -> FastAPI:
         for (category, name) in registry._registry:
             adapters.setdefault(category, []).append(name)
         return {"adapter_count": len(registry._registry), "adapters": adapters}
+
+    @app.get("/plugins", tags=["system"])
+    def list_plugins() -> dict:
+        """List all available generator plugins (built-in + installed)."""
+        plugin_registry.load()
+        plugins = plugin_registry.list_all()
+        return {
+            "count": len(plugins),
+            "plugins": [p.to_dict() for p in plugins],
+            "builtin_count": sum(1 for p in plugins if p.source == "builtin"),
+            "external_count": sum(1 for p in plugins if p.source == "plugin"),
+        }
 
     @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
     def prometheus_metrics() -> PlainTextResponse:
