@@ -100,13 +100,13 @@ def test_api_jobs_isolated_between_tenants(client):
     # Tenant acme should see it
     resp_acme = client.get("/jobs", headers={"X-Tenant-ID": "acme"})
     assert resp_acme.status_code == 200
-    job_ids = [j["job_id"] for j in resp_acme.json()]
+    job_ids = [j["job_id"] for j in resp_acme.json()["items"]]
     assert any(jid.startswith("acme:") for jid in job_ids)
 
     # Tenant beta should not see acme's jobs
     resp_beta = client.get("/jobs", headers={"X-Tenant-ID": "beta"})
     assert resp_beta.status_code == 200
-    for j in resp_beta.json():
+    for j in resp_beta.json()["items"]:
         assert not j["job_id"].startswith("acme:")
 
     # cleanup

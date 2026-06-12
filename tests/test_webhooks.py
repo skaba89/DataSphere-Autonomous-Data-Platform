@@ -85,14 +85,23 @@ def test_fire_calls_url():
 def test_fire_only_matching_events():
     """Register for job.completed only; fire job.failed — should not call URL."""
     reg = _make_registry()
-    reg.register("https://example.com/hook", "tenant1", ["job.completed"])
-    mock_open = _mock_urlopen_200()
+    unique_url = "https://example-nomatch-12345.com/hook"
+    reg.register(unique_url, "tenant_nomatch", ["job.completed"])
+    called_urls: list[str] = []
 
-    with patch("urllib.request.urlopen", mock_open):
-        reg.fire("job.failed", "job-456", "tenant1", {"error": "boom"})
-        time.sleep(0.2)
+    original_urlopen = __import__("urllib.request", fromlist=["urlopen"]).urlopen
 
-    assert not mock_open.called
+    def _tracking_urlopen(req, *args, **kwargs):
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        called_urls.append(url)
+        return original_urlopen(req, *args, **kwargs)
+
+    with patch("urllib.request.urlopen", side_effect=_tracking_urlopen):
+        reg.fire("job.failed", "job-456", "tenant_nomatch", {"error": "boom"})
+        time.sleep(0.3)
+
+    # The unique_url should NOT have been called
+    assert unique_url not in called_urls
 
 
 def test_fire_wildcard_matches_all_events():

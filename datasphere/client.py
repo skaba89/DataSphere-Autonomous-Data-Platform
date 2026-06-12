@@ -51,9 +51,8 @@ try:
 except ImportError:
     _HTTPX_AVAILABLE = False
 
-if not _HTTPX_AVAILABLE:
-    import urllib.request
-    import urllib.error
+import urllib.request
+import urllib.error
 
 
 class DataSphereError(Exception):

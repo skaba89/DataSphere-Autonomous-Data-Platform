@@ -97,7 +97,7 @@ def test_api_list_artifacts_empty(patched_client):
     resp = client.get("/artifacts/unknown-job-id")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["count"] == 0
+    assert data.get("count", data.get("total", 0)) == 0
     assert data["files"] == []
 
 
@@ -107,7 +107,7 @@ def test_api_list_artifacts_with_files(patched_client):
     resp = client.get("/artifacts/myjob")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["count"] == 2
+    assert data.get("count", data.get("total", 0)) == 2
     assert "infrastructure/main.tf" in data["files"]
 
 

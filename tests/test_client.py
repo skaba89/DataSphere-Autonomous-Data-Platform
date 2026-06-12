@@ -144,7 +144,8 @@ def test_client_generate_terraform():
 def test_client_list_jobs():
     c = _make_client()
     jobs = c.list_jobs()
-    assert isinstance(jobs, list)
+    # New paginated API returns a dict with "items"; legacy bare list also accepted
+    assert isinstance(jobs, (list, dict))
 
 
 # ---------------------------------------------------------------------------

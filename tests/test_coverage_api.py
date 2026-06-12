@@ -363,8 +363,9 @@ class TestDownloadEdgeCases:
         # List jobs to get the job_id of completed job
         jobs_r = client.get("/jobs")
         assert jobs_r.status_code == 200
-        jobs = jobs_r.json()
-        completed_jobs = [j for j in jobs if j["status"] == "completed"]
+        jobs_data = jobs_r.json()
+        jobs_list = jobs_data if isinstance(jobs_data, list) else jobs_data.get("items", [])
+        completed_jobs = [j for j in jobs_list if j["status"] == "completed"]
         if completed_jobs:
             job_id = completed_jobs[0]["job_id"]
             dl = client.get(f"/jobs/{job_id}/download")

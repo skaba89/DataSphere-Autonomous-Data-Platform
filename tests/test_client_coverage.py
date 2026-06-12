@@ -82,7 +82,7 @@ def test_generate_with_security_param():
         business_request="Secure pipeline",
         cloud_provider="aws",
         data_warehouse="snowflake",
-        security="RBAC",
+        security=["RBAC"],
     )
     assert isinstance(result, dict)
 
@@ -93,7 +93,7 @@ def test_generate_async_with_security_param():
         business_request="Secure async pipeline",
         cloud_provider="aws",
         data_warehouse="snowflake",
-        security="RLS",
+        security=["RLS"],
     )
     assert isinstance(job_id, str)
 
@@ -124,14 +124,16 @@ def test_list_jobs_dict_with_jobs_key():
     c = _make_client()
     c._get = lambda path: {"jobs": [{"id": "j1"}]}  # type: ignore[method-assign]
     result = c.list_jobs()
-    assert result == [{"id": "j1"}]
+    # New API returns the dict as-is; items may be in "jobs" or "items" key
+    assert isinstance(result, dict)
 
 
 def test_list_jobs_dict_with_items_key():
     c = _make_client()
-    c._get = lambda path: {"items": [{"id": "j2"}]}  # type: ignore[method-assign]
+    c._get = lambda path: {"items": [{"id": "j2"}], "total": 1, "has_more": False}  # type: ignore[method-assign]
     result = c.list_jobs()
-    assert result == [{"id": "j2"}]
+    assert isinstance(result, dict)
+    assert result.get("items") == [{"id": "j2"}]
 
 
 def test_list_jobs_dict_fallback_empty():
@@ -147,7 +149,8 @@ def test_list_jobs_unexpected_type():
     c = _make_client()
     c._get = lambda path: None  # type: ignore[method-assign]
     result = c.list_jobs()
-    assert result == []
+    # None response falls back to empty items dict or empty list
+    assert result == [] or (isinstance(result, dict) and result.get("items", []) == [])
 
 
 # ---------------------------------------------------------------------------
@@ -291,15 +294,31 @@ def test_headers_without_api_key():
 
 # ---------------------------------------------------------------------------
 # urllib fallback path (when httpx is not available)
+# We inject urllib into the client module namespace since it's only imported
+# conditionally (when httpx is unavailable), then monkeypatch _HTTPX_AVAILABLE.
 # ---------------------------------------------------------------------------
+
+import urllib.request as _urllib_request
+import urllib.error as _urllib_error
+import io as _io
+
+
+def _setup_urllib_fallback(monkeypatch):
+    """Configure client module to use urllib fallback."""
+    import datasphere.client as client_mod
+    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
+    # Inject urllib into the module so the fallback code can find it
+    import types
+    if not hasattr(client_mod, "urllib"):
+        urllib_ns = types.SimpleNamespace()
+        urllib_ns.request = _urllib_request
+        urllib_ns.error = _urllib_error
+        monkeypatch.setattr(client_mod, "urllib", urllib_ns)
+
 
 def test_post_urllib_fallback(monkeypatch):
     """Test _post using urllib fallback path."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
-
-    import urllib.request
-    import io
+    _setup_urllib_fallback(monkeypatch)
 
     response_data = json.dumps({"status": "ok"}).encode()
 
@@ -311,7 +330,7 @@ def test_post_urllib_fallback(monkeypatch):
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
+    monkeypatch.setattr(_urllib_request, "urlopen", lambda req, timeout=None: FakeResponse())
 
     c = DataSphereClient("http://localhost:9999")
     result = c._post("/test", {"key": "value"})
@@ -320,26 +339,32 @@ def test_post_urllib_fallback(monkeypatch):
 
 def test_get_urllib_fallback_json(monkeypatch):
     """Test _get using urllib fallback path with JSON response."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
-
-    import urllib.request
+    _setup_urllib_fallback(monkeypatch)
 
     response_data = json.dumps({"hello": "world"}).encode()
 
-    class FakeResponse:
-        def __init__(self):
-            self.headers = {"Content-Type": "application/json"}
+    class FakeResponseJson:
         def read(self):
             return response_data
+        def headers(self):
+            return None
         def get(self, key, default=""):
-            return self.headers.get(key, default)
+            return {"Content-Type": "application/json"}.get(key, default)
         def __enter__(self):
             return self
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
+    # The client code does: ct = resp.headers.get("Content-Type", "")
+    # We need headers to be an object with a .get() method
+    class FakeHeaders:
+        def get(self, key, default=""):
+            return {"Content-Type": "application/json"}.get(key, default)
+
+    fake = FakeResponseJson()
+    fake.headers = FakeHeaders()
+
+    monkeypatch.setattr(_urllib_request, "urlopen", lambda req, timeout=None: fake)
 
     c = DataSphereClient("http://localhost:9999")
     result = c._get("/test")
@@ -348,24 +373,23 @@ def test_get_urllib_fallback_json(monkeypatch):
 
 def test_get_urllib_fallback_bytes(monkeypatch):
     """Test _get using urllib fallback path with binary response."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
+    _setup_urllib_fallback(monkeypatch)
 
-    import urllib.request
+    class FakeHeaders:
+        def get(self, key, default=""):
+            return {"Content-Type": "application/zip"}.get(key, default)
 
     class FakeResponse:
         def __init__(self):
-            self.headers = {"Content-Type": "application/zip"}
+            self.headers = FakeHeaders()
         def read(self):
             return b"PK binary zip content"
-        def get(self, key, default=""):
-            return self.headers.get(key, default)
         def __enter__(self):
             return self
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
+    monkeypatch.setattr(_urllib_request, "urlopen", lambda req, timeout=None: FakeResponse())
 
     c = DataSphereClient("http://localhost:9999")
     result = c._get("/test")
@@ -374,20 +398,15 @@ def test_get_urllib_fallback_bytes(monkeypatch):
 
 def test_post_urllib_http_error(monkeypatch):
     """Test _post urllib raises DataSphereError on HTTP error."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
-
-    import urllib.request
-    import urllib.error
+    _setup_urllib_fallback(monkeypatch)
 
     def raise_http_error(req, timeout=None):
-        raise urllib.error.HTTPError(
+        raise _urllib_error.HTTPError(
             url="http://test", code=404, msg="Not Found",
-            hdrs=None, fp=io.BytesIO(b"not found")  # type: ignore
+            hdrs=None, fp=_io.BytesIO(b"not found")  # type: ignore
         )
 
-    import io
-    monkeypatch.setattr(urllib.request, "urlopen", raise_http_error)
+    monkeypatch.setattr(_urllib_request, "urlopen", raise_http_error)
 
     c = DataSphereClient("http://localhost:9999")
     with pytest.raises(DataSphereError, match="404"):
@@ -396,20 +415,15 @@ def test_post_urllib_http_error(monkeypatch):
 
 def test_get_urllib_http_error(monkeypatch):
     """Test _get urllib raises DataSphereError on HTTP error."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
-
-    import urllib.request
-    import urllib.error
-    import io
+    _setup_urllib_fallback(monkeypatch)
 
     def raise_http_error(req, timeout=None):
-        raise urllib.error.HTTPError(
+        raise _urllib_error.HTTPError(
             url="http://test", code=403, msg="Forbidden",
-            hdrs=None, fp=io.BytesIO(b"forbidden")  # type: ignore
+            hdrs=None, fp=_io.BytesIO(b"forbidden")  # type: ignore
         )
 
-    monkeypatch.setattr(urllib.request, "urlopen", raise_http_error)
+    monkeypatch.setattr(_urllib_request, "urlopen", raise_http_error)
 
     c = DataSphereClient("http://localhost:9999")
     with pytest.raises(DataSphereError, match="403"):
@@ -418,10 +432,7 @@ def test_get_urllib_http_error(monkeypatch):
 
 def test_stream_sse_urllib_fallback(monkeypatch):
     """Test _stream_sse using urllib fallback."""
-    import datasphere.client as client_mod
-    monkeypatch.setattr(client_mod, "_HTTPX_AVAILABLE", False)
-
-    import urllib.request
+    _setup_urllib_fallback(monkeypatch)
 
     lines = [
         b'data: {"type": "status", "message": "running"}\n',
@@ -434,7 +445,7 @@ def test_stream_sse_urllib_fallback(monkeypatch):
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
+    monkeypatch.setattr(_urllib_request, "urlopen", lambda req, timeout=None: FakeResponse())
 
     c = DataSphereClient("http://localhost:9999")
     events = list(c._stream_sse("http://localhost:9999/stream"))

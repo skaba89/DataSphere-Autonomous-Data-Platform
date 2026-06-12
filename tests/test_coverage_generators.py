@@ -358,7 +358,9 @@ class TestClientEdgeCases:
         c._get = _get  # type: ignore[method-assign]
 
         result = c.list_jobs()
-        assert isinstance(result, list)
+        # list_jobs now returns a paginated dict
+        assert isinstance(result, dict)
+        assert "items" in result
 
     def test_client_list_jobs_handles_dict_response(self):
         from datasphere.client import DataSphereClient
@@ -366,13 +368,14 @@ class TestClientEdgeCases:
         c = DataSphereClient(base_url="http://test")
 
         def _get(path: str):
-            # Simulate API wrapping in dict
-            return {"jobs": [{"job_id": "abc", "status": "completed"}]}
+            # Simulate paginated API response
+            return {"items": [{"job_id": "abc", "status": "completed"}], "total": 1, "has_more": False}
 
         c._get = _get  # type: ignore[method-assign]
 
         result = c.list_jobs()
-        assert result == [{"job_id": "abc", "status": "completed"}]
+        assert isinstance(result, dict)
+        assert result["items"] == [{"job_id": "abc", "status": "completed"}]
 
     def test_client_list_jobs_handles_items_key(self):
         from datasphere.client import DataSphereClient
@@ -380,12 +383,12 @@ class TestClientEdgeCases:
         c = DataSphereClient(base_url="http://test")
 
         def _get(path: str):
-            return {"items": [{"job_id": "xyz", "status": "pending"}]}
+            return {"items": [{"job_id": "xyz", "status": "pending"}], "total": 1, "has_more": False}
 
         c._get = _get  # type: ignore[method-assign]
 
         result = c.list_jobs()
-        assert result == [{"job_id": "xyz", "status": "pending"}]
+        assert result["items"] == [{"job_id": "xyz", "status": "pending"}]
 
     def test_client_download_job_raises_on_json_response(self):
         from datasphere.client import DataSphereClient, DataSphereError

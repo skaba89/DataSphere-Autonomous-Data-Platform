@@ -96,6 +96,46 @@ class _RateLimiter:
 
 _rate_limiter = _RateLimiter(_RATE_LIMIT_RPM)
 
+# Per-endpoint limits (RPM) — tighter caps for expensive routes
+_ENDPOINT_LIMITS: dict[str, int] = {
+    "/generate": 10,
+    "/generate/sync": 5,
+    "/proposals": 20,
+    "/costs/estimate": 30,
+    "/stacks/diff": 30,
+}
+_env_ep = os.environ.get("DATASPHERE_ENDPOINT_RATE_LIMITS", "")
+if _env_ep:
+    try:
+        import json as _json
+        _overrides = _json.loads(_env_ep)
+        # normalise keys: add leading slash if absent
+        _ENDPOINT_LIMITS.update({
+            (k if k.startswith("/") else f"/{k}"): v
+            for k, v in _overrides.items()
+        })
+    except Exception:
+        pass
+
+_endpoint_limiters: dict[str, _RateLimiter] = {}
+_endpoint_limiters_lock = threading.Lock()
+
+
+def _check_endpoint_limit(path: str, ip: str) -> tuple[bool, int]:
+    """Return (allowed, rpm_limit) for per-endpoint rate limiting. rpm=0 means no limit."""
+    norm = path.rstrip("/")
+    if norm.startswith("/v1"):
+        norm = norm[3:]
+    limit = _ENDPOINT_LIMITS.get(norm)
+    if limit is None:
+        return True, 0
+    with _endpoint_limiters_lock:
+        if norm not in _endpoint_limiters:
+            _endpoint_limiters[norm] = _RateLimiter(limit)
+        limiter = _endpoint_limiters[norm]
+    return limiter.is_allowed(ip), limit
+
+
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
@@ -502,6 +542,18 @@ GET /generate/stream?job_id=<id> → EventSource
                     content='{"detail":"Too many requests — rate limit exceeded"}',
                     status_code=429,
                     headers={"Content-Type": "application/json", "Retry-After": "60"},
+                )
+            ep_allowed, ep_rpm = _check_endpoint_limit(request.url.path, ip)
+            if not ep_allowed:
+                _log.warning("endpoint_rate_limit_exceeded", extra={"ip": ip, "path": request.url.path})
+                norm = request.url.path.rstrip("/")
+                if norm.startswith("/v1"):
+                    norm = norm[3:]
+                retry_after = str(max(1, 60 // ep_rpm)) if ep_rpm else "60"
+                return Response(
+                    content=f'{{"error":"rate_limit_exceeded","endpoint":"{norm}","retry_after":{retry_after}}}',
+                    status_code=429,
+                    headers={"Content-Type": "application/json", "Retry-After": retry_after},
                 )
 
         start = time.monotonic()
@@ -1866,17 +1918,27 @@ Le job est lancé en arrière-plan — suivez l'avancement via `GET /jobs/{job_i
     @app.get("/stacks/supported", tags=["catalog"])
     def supported_stacks() -> dict:
         """Retourne tous les outils supportés par catégorie."""
+        cached = cache.get("stacks:supported")
+        if cached is not _CACHE_MISSING:
+            return cached
         from datasphere.core.config import ALLOWED
-        return {"categories": ALLOWED}
+        result = {"categories": ALLOWED}
+        cache.set("stacks:supported", result, 300)
+        return result
 
     @app.get("/stacks/adapters", tags=["catalog"])
     def list_adapters() -> dict:
         """Retourne tous les adaptateurs enregistrés dans le registry."""
+        cached = cache.get("stacks:adapters")
+        if cached is not _CACHE_MISSING:
+            return cached
         from datasphere.core.registry import registry
         adapters: dict[str, list[str]] = {}
         for (category, name) in registry._registry:
             adapters.setdefault(category, []).append(name)
-        return {"adapter_count": len(registry._registry), "adapters": adapters}
+        result = {"adapter_count": len(registry._registry), "adapters": adapters}
+        cache.set("stacks:adapters", result, 300)
+        return result
 
     @app.get("/plugins", tags=["system"])
     def list_plugins() -> dict:

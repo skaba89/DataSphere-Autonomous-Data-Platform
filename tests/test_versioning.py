@@ -51,7 +51,10 @@ def test_v1_terraform_generate_works(client):
 def test_v1_jobs_list_works(client):
     resp = client.get("/v1/jobs")
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    body = resp.json()
+    # Now returns paginated envelope
+    assert isinstance(body, dict)
+    assert "items" in body
 
 
 def test_v1_health_works(client):
@@ -146,5 +149,5 @@ def test_sdk_client_uses_v1_prefix(client):
 
     # Confirm list_jobs hits /v1/jobs
     sdk.list_jobs()
-    assert called_urls[-1] == "/jobs"  # path before prefix
+    assert called_urls[-1].startswith("/jobs")  # path before prefix (may include ?limit=)
     assert sdk._version_prefix == "/v1"
