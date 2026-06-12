@@ -49,6 +49,7 @@ from datasphere.api.artifact_store import artifact_store
 from datasphere.api.metrics import metrics
 from datasphere.api.notifications import notification_service
 from datasphere.api.cache import cache, MISSING as _CACHE_MISSING
+from datasphere.api.db_migration import run_migrations
 
 setup_logging()
 _log = get_logger(__name__)
@@ -452,6 +453,7 @@ def _build_stack_report(result: dict) -> str:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    run_migrations()
     setup_tracing("datasphere-api")
     _log.info("datasphere_api_starting", extra={"version": _VERSION})
     # Startup: load plugins
