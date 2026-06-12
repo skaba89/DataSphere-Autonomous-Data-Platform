@@ -189,6 +189,12 @@ class WebhookRegisterRequest(BaseModel):
     secret: str = Field(default="", description="Optional HMAC signing secret")
 
 
+class TemplateGenerateRequest(BaseModel):
+    template_id: str
+    business_request: str = Field(..., min_length=3, max_length=2000)
+    overrides: dict = Field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -1070,11 +1076,6 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     from datasphere.generators.templates import template_registry as _template_registry
-
-    class TemplateGenerateRequest(BaseModel):
-        template_id: str
-        business_request: str = Field(..., min_length=3, max_length=2000)
-        overrides: dict = Field(default_factory=dict)
 
     @app.get("/templates", tags=["templates"])
     def list_templates(category: str | None = None, budget: str | None = None) -> dict:

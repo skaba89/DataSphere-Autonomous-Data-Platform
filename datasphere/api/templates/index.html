@@ -241,6 +241,7 @@
     <button class="tab" onclick="switchTab('generators')">🔧 dbt / DAGs</button>
     <button class="tab" onclick="switchTab('catalog')">📦 Catalogue</button>
     <button class="tab" onclick="switchTab('jobs')">📋 Historique</button>
+    <button class="tab" onclick="switchTab('templates')">📋 Templates</button>
   </div>
 
   <!-- ================================================================
@@ -937,6 +938,36 @@
     </div>
     <div id="jobs-content">
       <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       TAB: TEMPLATES
+  ================================================================ -->
+  <div id="tab-templates" class="tab-panel">
+    <div class="section-title">📋 Templates de stacks prédéfinis</div>
+    <p class="text-muted" style="margin-bottom:20px;">Choisissez un template adapté à votre contexte. Cliquez sur une carte pour voir les détails et générer votre architecture.</p>
+
+    <!-- Category filter -->
+    <div id="template-filters" style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+      <button class="btn btn-secondary btn-sm template-filter-btn active" onclick="loadTemplates(null)" data-cat="">Tous</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('startup')" data-cat="startup">🚀 Startup</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('analytics')" data-cat="analytics">📊 Analytics</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('enterprise')" data-cat="enterprise">🏢 Enterprise</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('streaming')" data-cat="streaming">⚡ Streaming</button>
+      <button class="btn btn-secondary btn-sm template-filter-btn" onclick="loadTemplates('ml')" data-cat="ml">🤖 ML</button>
+    </div>
+
+    <!-- Template cards grid -->
+    <div id="template-grid" class="proposal-grid">
+      <div class="loader"><div class="spinner"></div><p class="text-muted">Chargement des templates…</p></div>
+    </div>
+
+    <!-- Template detail panel -->
+    <div id="template-detail" style="display:none;margin-top:28px;">
+      <div class="card">
+        <div id="template-detail-content"></div>
+      </div>
     </div>
   </div>
 
@@ -1793,12 +1824,171 @@ async function checkHealth() {
 }
 
 // ============================================================
+// Templates
+// ============================================================
+let _allTemplates = [];
+let _selectedTemplateId = null;
+
+async function loadTemplates(category) {
+  // Update active filter button
+  document.querySelectorAll('.template-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-cat') === (category || ''));
+  });
+
+  const grid = document.getElementById('template-grid');
+  grid.innerHTML = '<div class="loader"><div class="spinner"></div><p class="text-muted">Chargement…</p></div>';
+
+  try {
+    const url = category ? `/templates?category=${encodeURIComponent(category)}` : '/templates';
+    const res = await fetch(url);
+    const data = await res.json();
+    _allTemplates = data.templates || [];
+    renderTemplateCards(_allTemplates);
+  } catch(e) {
+    grid.innerHTML = `<div class="card" style="color:var(--danger);">Erreur: ${e.message}</div>`;
+  }
+}
+
+function renderTemplateCards(templates) {
+  const grid = document.getElementById('template-grid');
+  if (!templates.length) {
+    grid.innerHTML = '<p class="text-muted">Aucun template trouvé.</p>';
+    return;
+  }
+
+  const complexityColor = { low: 'var(--success)', medium: 'var(--warning)', high: 'var(--danger)' };
+
+  grid.innerHTML = templates.map(t => `
+    <div class="proposal-card${_selectedTemplateId === t.id ? ' selected' : ''}" onclick="selectTemplate('${t.id}')">
+      <div class="proposal-name">${t.name}</div>
+      <div class="proposal-tagline">${t.description}</div>
+      <div class="proposal-cost">$${t.estimated_monthly_usd.toLocaleString()}<span style="font-size:0.75rem;font-weight:400;color:var(--muted);">/mois</span></div>
+      <div class="proposal-meta">
+        <span class="tag" style="color:${complexityColor[t.complexity] || 'var(--muted)'};">● ${t.complexity}</span>
+        <span class="tag">${t.time_to_deploy}</span>
+        <span class="tag" style="color:var(--accent2);">${t.category}</span>
+        ${(t.tags || []).slice(0, 3).map(tag => `<span class="tag">${tag}</span>`).join('')}
+      </div>
+      <div style="margin-top:12px;">
+        ${(t.pros || []).slice(0, 2).map(p => `<div style="font-size:0.78rem;color:var(--success);">✓ ${p}</div>`).join('')}
+        ${(t.cons || []).slice(0, 1).map(c => `<div style="font-size:0.78rem;color:var(--muted);">✗ ${c}</div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectTemplate(templateId) {
+  _selectedTemplateId = templateId;
+  renderTemplateCards(_allTemplates); // re-render to update selected highlight
+
+  const detailPanel = document.getElementById('template-detail');
+  const detailContent = document.getElementById('template-detail-content');
+  detailPanel.style.display = 'block';
+  detailContent.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  try {
+    const res = await fetch(`/templates/${templateId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const t = await res.json();
+
+    const stackEntries = Object.entries(t.constraints || {})
+      .filter(([k]) => k !== 'security')
+      .map(([k, v]) => `<div class="stack-card"><div class="layer">${k}</div><div class="tool">${v}</div></div>`)
+      .join('');
+
+    detailContent.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:6px;">${t.name}</h2>
+          <p style="color:var(--muted);max-width:600px;">${t.description}</p>
+        </div>
+        <button class="btn btn-primary" onclick="useTemplate('${t.id}')">🚀 Générer depuis ce template</button>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px;">COÛT ESTIMÉ</div>
+          <div class="cost-big">$${t.estimated_monthly_usd.toLocaleString()}<span style="font-size:1rem;font-weight:400;color:var(--muted);">/mois</span></div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">DÉPLOIEMENT</div>
+          <div>${t.time_to_deploy}</div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            ${(t.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;font-weight:600;">STACK TECHNIQUE</div>
+        <div class="stack-grid">${stackEntries}</div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">AVANTAGES</div>
+          ${(t.pros || []).map(p => `<div style="font-size:0.85rem;color:var(--success);margin-bottom:4px;">✓ ${p}</div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">INCONVÉNIENTS</div>
+          ${(t.cons || []).map(c => `<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">✗ ${c}</div>`).join('')}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;">CAS D'USAGE</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${(t.use_cases || []).map(uc => `<span class="tag" style="color:var(--accent2);">${uc}</span>`).join('')}
+        </div>
+      </div>
+    `;
+
+    detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    detailContent.innerHTML = `<div style="color:var(--danger);">Erreur: ${e.message}</div>`;
+  }
+}
+
+function useTemplate(templateId) {
+  const t = _allTemplates.find(x => x.id === templateId);
+  if (!t) return;
+
+  // Switch to generate tab
+  switchTab('generate');
+  selectMode('explicit');
+
+  // Pre-fill form fields from template constraints
+  const stack = t.stack || t.constraints || {};
+  const fieldMap = {
+    cloud: 'cloud_provider',
+    warehouse: 'data_warehouse',
+    orchestrator: 'orchestrator',
+    ingestion: 'ingestion',
+    transformation: 'transformation',
+    bi_tool: 'bi_tool',
+    deployment: 'deployment',
+    budget: 'budget',
+  };
+  Object.entries(fieldMap).forEach(([stackKey, formId]) => {
+    const el = document.getElementById(formId);
+    if (el && stack[stackKey]) {
+      // Try to set value; only works if option exists
+      const opt = Array.from(el.options).find(o => o.value === stack[stackKey]);
+      if (opt) el.value = stack[stackKey];
+    }
+  });
+
+  showToast(`Template "${t.name}" appliqué dans le formulaire`, 'success');
+}
+
+// ============================================================
 // Init
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   checkHealth();
   setInterval(checkHealth, 30000);
   setTimeout(loadCatalog, 500);
+  setTimeout(() => loadTemplates(null), 600);
 });
 </script>
 </body>
